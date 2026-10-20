@@ -155,6 +155,17 @@ COOKIE_HINT = (
 )
 
 
+BOT_HINT = (
+    "YouTube is asking this connection to prove it isn't a bot, usually after many downloads in a row. "
+    'Waiting an hour or so clears it; to keep going now, export a cookies.txt for youtube.com while signed in '
+    'and set "cookies_file" to its path in config.json.'
+)
+
+
+def is_bot_check(err: str) -> bool:
+    return "not a bot" in err or "Sign in to confirm" in err
+
+
 def cookie_attempt() -> dict:
     """The last retry rung: a cookies.txt from config.json if one is set, else Chrome's own cookie store."""
     path = load_config().get("cookies_file") or ""
@@ -173,7 +184,8 @@ def run_job(job_id: str, url: str, fmt: str, dest: str):
         cookie_attempt(),
     ]
     first_err = ""
-    for extra in attempts:
+    while attempts:
+        extra = attempts.pop(0)
         try:
             with YoutubeDL({**ydl_opts(fmt, job_id, dest), **extra}) as ydl:
                 info = ydl.extract_info(url, download=True)
@@ -185,8 +197,14 @@ def run_job(job_id: str, url: str, fmt: str, dest: str):
             if "cookiesfrombrowser" in extra and "cookie" in str(e).lower():
                 # Reading Chrome's cookies failed, which says nothing about the video; explain instead of hiding it.
                 first_err = f"{first_err} {COOKIE_HINT}"
+            if is_bot_check(str(e)) and attempts:
+                # YouTube is rate-limiting this IP: other player clients get the same answer, signed-in cookies don't.
+                attempts = attempts[-1:]
+                continue
             if "403" not in str(e) and "reloaded" not in str(e):
                 break
+    if is_bot_check(first_err):
+        first_err = f"{first_err} {BOT_HINT}"
     jobs[job_id].update(status="error", error=first_err, finished_at=time.monotonic())
     partials.pop(job_id, None)
 

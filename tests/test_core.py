@@ -103,6 +103,19 @@ def test_cookies_file_used_when_set(core, monkeypatch, tmp_path):
     assert job["status"] == "done" and calls[-1]["cookiefile"] == str(cookies)
 
 
+BOT = "ERROR: [youtube] x: Sign in to confirm you're not a bot. Use --cookies-from-browser or --cookies"
+
+
+def test_bot_check_jumps_to_cookies(core, monkeypatch, tmp_path):
+    job, calls = run_real_job(core, monkeypatch, [BOT, None], tmp_path)
+    assert job["status"] == "done" and len(calls) == 2 and "cookiesfrombrowser" in calls[-1]
+
+
+def test_bot_check_failure_explained(core, monkeypatch, tmp_path):
+    job, calls = run_real_job(core, monkeypatch, [BOT, BOT], tmp_path)
+    assert len(calls) == 2 and job["error"].startswith(BOT) and "cookies_file" in job["error"]
+
+
 def test_non_403_error_stops_retrying(core, monkeypatch, tmp_path):
     job, calls = run_real_job(core, monkeypatch, ["Video unavailable"], tmp_path)
     assert len(calls) == 1 and job["error"] == "Video unavailable"
