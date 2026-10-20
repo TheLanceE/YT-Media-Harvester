@@ -1,0 +1,2 @@
+# The helper's runtime dependency. 2025.11.12 is the first release with the js_runtimes option server.py uses.
+yt-dlp>=2025.11.12

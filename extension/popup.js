@@ -54,7 +54,10 @@ async function start(url, format, card) {
       if (s.status === "error") { clearInterval(timer); return setState(card, "error", "Error: " + s.error); }
       const pct = parseFloat(s.progress);
       if (s.progress === "converting") setState(card, "running", "Converting and tagging…", null);
-      else setState(card, "running", `Downloading ${s.progress || ""}`, isNaN(pct) ? null : pct);
+      else {
+        const what = format === "mp4" ? (s.part > 1 ? " audio" : " video") : "";
+        setState(card, "running", `Downloading${what} ${s.progress || ""}`, isNaN(pct) ? null : pct);
+      }
     }, 700);
   } catch {
     setState(card, "error", OFFLINE);

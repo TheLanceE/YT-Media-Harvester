@@ -38,7 +38,7 @@ some-folder\
 
    ```
    python -m venv .venv
-   .venv\Scripts\pip install yt-dlp
+   .venv\Scripts\pip install -r YT-Media-Harvester\requirements.txt
    ```
 
 2. **Load the extension:** open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked** and select the `extension/` folder.
