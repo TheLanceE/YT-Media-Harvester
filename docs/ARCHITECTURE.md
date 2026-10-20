@@ -31,10 +31,10 @@ YT Media Harvester has two halves: a Manifest V3 Chrome extension that provides 
 
 ## Starting the helper
 
-1. The popup or options page calls `GET /`. If that fails, it calls `chrome.runtime.sendNativeMessage("com.yt_tab_downloader.helper", {cmd: "start"})`.
+1. Every HTTP call goes through `extension/helper.js`. If it has no token in `chrome.storage.session`, gets a `401`, or can't reach the server, it calls `chrome.runtime.sendNativeMessage("com.yt_tab_downloader.helper", {cmd: "start"})`.
 2. Chrome looks up the host in `HKCU\Software\Google\Chrome\NativeMessagingHosts\com.yt_tab_downloader.helper`, which points to `com.yt_tab_downloader.helper.json`. That manifest names `native_host.bat` and only allows this extension's origin.
-3. `native_host.py` checks whether port 8765 is open. If not, it launches `server.py --idle-minutes 30` hidden (`CREATE_NO_WINDOW`) and detached from Chrome's job object so it outlives the host, with output going to `helper.log`. It waits up to 15 seconds for the port to open, then replies `{ok: true}`.
-4. The extension retries its HTTP call.
+3. `native_host.py` checks whether port 8765 is open. If not, it launches `server.py --idle-minutes 30` hidden (`CREATE_NO_WINDOW`) and detached from Chrome's job object so it outlives the host, with output going to `helper.log`. It waits up to 15 seconds for the port to open, then replies `{ok: true, token}`. The token is created in `config.json` on first use.
+4. The extension stores the token and retries its HTTP call once.
 
 The server exits on its own once 30 minutes pass with no requests and no running job.
 
@@ -53,7 +53,7 @@ Jobs live in memory only. Restarting the helper forgets them.
 
 ## HTTP API
 
-All responses are JSON. Base URL `http://127.0.0.1:8765`.
+All responses are JSON. Base URL `http://127.0.0.1:8765`. Every request needs an `X-Helper-Token` header and is otherwise rejected with `401`.
 
 | Method | Path | Body | Response |
 | --- | --- | --- | --- |
@@ -67,13 +67,14 @@ All responses are JSON. Base URL `http://127.0.0.1:8765`.
 ## Security notes
 
 - The server binds to `127.0.0.1` only, so nothing outside the machine can reach it.
-- CORS is open (`*`), so any web page you visit could call `/download` or `/status`. Downloads are restricted to YouTube URLs and always go to the configured folder.
-- `/config` and `/choose-folder` reject requests whose `Origin` isn't a `chrome-extension://` origin, so web pages can't change where files are written.
+- Every route requires the `X-Helper-Token` header, and a request whose `Origin` is set to anything other than this extension's `chrome-extension://` origin is rejected. A web page can't send a custom header without a CORS preflight, and preflights are refused for every origin except the extension's, so pages can't start downloads, open the folder, or read the folder path.
+- The token lives in `config.json` and reaches the extension only through the native messaging host. Any local program that can read your files can still read it; the helper only defends against web pages.
+- Job IDs are random (`uuid4`).
 - The native messaging host only accepts the pinned extension ID.
 
 ## Local files
 
-These are created at runtime and are ignored by git: `config.json` (download folder), `helper.log` (helper output), `com.yt_tab_downloader.helper.json` (native host manifest, written by `install.bat`), and `downloads/` (default output folder).
+These are created at runtime and are ignored by git: `config.json` (download folder and token), `helper.log` (helper output), `com.yt_tab_downloader.helper.json` (native host manifest, written by `install.bat`), and `downloads/` (default output folder).
 
 ## Platform limits
 

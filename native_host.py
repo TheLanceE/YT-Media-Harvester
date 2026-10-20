@@ -1,4 +1,5 @@
-"""Chrome native messaging host: starts server.py in the background when the extension asks.
+"""Chrome native messaging host: starts server.py in the background when the extension asks,
+and hands the extension the token the server requires.
 
   python native_host.py install     register with Chrome (run once, via install.bat)
   python native_host.py uninstall   remove the registration
@@ -12,8 +13,9 @@ import subprocess
 import sys
 import time
 
+import auth
+
 NAME = "com.yt_tab_downloader.helper"
-EXTENSION_ID = "kcnffalmlnicdbnolfbgonjbjaekcleg"  # pinned by "key" in extension/manifest.json
 HOST, PORT = "127.0.0.1", 8765
 IDLE_MINUTES = 30  # the server stops itself after this long with no requests and no running job
 BASE = os.path.dirname(os.path.abspath(__file__))
@@ -31,7 +33,7 @@ def server_up() -> bool:
 
 def start_server() -> dict:
     if server_up():
-        return {"ok": True, "started": False}
+        return {"ok": True, "started": False, "token": auth.token()}
     log = open(os.path.join(BASE, "helper.log"), "ab")
     cmd = [sys.executable, os.path.join(BASE, "server.py"), "--idle-minutes", str(IDLE_MINUTES)]
     kw = {"cwd": BASE, "stdin": subprocess.DEVNULL, "stdout": log, "stderr": log, "close_fds": True}
@@ -48,7 +50,7 @@ def start_server() -> dict:
     for _ in range(60):  # importing yt_dlp takes a few seconds
         time.sleep(0.25)
         if server_up():
-            return {"ok": True, "started": True}
+            return {"ok": True, "started": True, "token": auth.token()}
     return {"ok": False, "error": "helper did not start, see helper.log"}
 
 
@@ -72,7 +74,7 @@ def install():
             "description": "YT Tab Downloader helper launcher",
             "path": os.path.join(BASE, "native_host.bat"),
             "type": "stdio",
-            "allowed_origins": [f"chrome-extension://{EXTENSION_ID}/"],
+            "allowed_origins": [f"{auth.ORIGIN}/"],
         }, f, indent=2)
     import winreg
     with winreg.CreateKey(winreg.HKEY_CURRENT_USER, REG_KEY) as k:

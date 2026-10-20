@@ -1,13 +1,17 @@
 """Local helper: receives a YouTube URL from the browser extension and downloads it with yt-dlp."""
+import hmac
 import json
 import os
 import shutil
 import sys
 import threading
 import time
+import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from yt_dlp import YoutubeDL
+
+import auth
 
 # deno.exe crashes on this machine (0xc0000142) and yt-dlp probes it via PATH; hide it from this process.
 os.environ["PATH"] = os.pathsep.join(
@@ -17,7 +21,7 @@ os.environ["PATH"] = os.pathsep.join(
 HOST, PORT = "127.0.0.1", 8765
 BASE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_OUT_DIR = os.path.join(BASE, "downloads")
-CONFIG = os.path.join(BASE, "config.json")  # {"out_dir": "D:\\Music"}; written by the extension's Settings page
+CONFIG = auth.CONFIG  # {"out_dir": "D:\\Music"}; written by the extension's Settings page
 picker_lock = threading.Lock()
 
 
@@ -65,6 +69,7 @@ def choose_folder() -> str:
     return os.path.normpath(picked) if picked else ""
 
 
+auth_token = auth.token()
 jobs: dict[str, dict] = {}
 last_request = time.monotonic()
 
@@ -137,16 +142,26 @@ class Handler(BaseHTTPRequestHandler):
         data = json.dumps(body).encode()
         self.send_response(code)
         self.send_header("Content-Type", "application/json")
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Allow-Origin", auth.ORIGIN)
+        self.send_header("Access-Control-Allow-Headers", f"Content-Type, {auth.HEADER}")
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)
 
+    def _authorized(self) -> bool:
+        """Only the extension: its own origin (or none, which Chrome may omit for extension pages) and the token.
+        A web page can't send the token header without a CORS preflight, which only allows our origin."""
+        origin = self.headers.get("Origin")
+        if origin is not None and origin != auth.ORIGIN:
+            return False
+        return hmac.compare_digest(self.headers.get(auth.HEADER, "").encode(), auth_token.encode())
+
     def do_OPTIONS(self):
-        self._send(204, {})
+        self._send(204 if self.headers.get("Origin") == auth.ORIGIN else 403, {})
 
     def do_GET(self):
+        if not self._authorized():
+            return self._send(401, {"error": "unauthorized"})
         if self.path.startswith("/status/"):
             job = jobs.get(self.path.rsplit("/", 1)[1])
             return self._send(200 if job else 404, job or {"error": "unknown job"})
@@ -156,11 +171,10 @@ class Handler(BaseHTTPRequestHandler):
         self._send(200, {"ok": True, "out_dir": out_dir(), "default_out_dir": DEFAULT_OUT_DIR})
 
     def do_POST(self):
+        if not self._authorized():
+            return self._send(401, {"error": "unauthorized"})
         body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
         if self.path in ("/config", "/choose-folder"):
-            # Only the extension may change where files are written, not any website you happen to visit.
-            if not self.headers.get("Origin", "").startswith("chrome-extension://"):
-                return self._send(403, {"error": "settings can only be changed from the extension"})
             try:
                 if self.path == "/choose-folder":
                     picked = choose_folder()
@@ -179,7 +193,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(400, {"error": "not a YouTube video URL"})
         if fmt not in ("mp3", "mp4"):
             return self._send(400, {"error": "format must be mp3 or mp4"})
-        job_id = str(len(jobs) + 1)
+        job_id = uuid.uuid4().hex
         dest = out_dir()
         try:
             os.makedirs(dest, exist_ok=True)

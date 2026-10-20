@@ -1,8 +1,6 @@
-const API = "http://127.0.0.1:8765";
 const list = document.getElementById("list");
 const msg = document.getElementById("msg");
-const NATIVE_HOST = "com.yt_tab_downloader.helper";
-const OFFLINE = "Helper couldn't start. Run install.bat once (or start start.bat).";
+const OFFLINE = "Helper couldn't start. Run install.bat once, then reload the extension.";
 
 function cleanTitle(t) { return t.replace(/^\(\d+\)\s*/, "").replace(/\s*-\s*YouTube$/, ""); }
 
@@ -12,31 +10,13 @@ function videoId(url) {
 }
 
 async function ping() {
-  try { return await (await fetch(`${API}/`)).json(); } catch { return null; }
-}
-
-// Returns the helper's info, starting it through the native host (install.bat) if it isn't running.
-let launching = null;
-function ensureHelper() {
-  return launching ??= (async () => {
-    let j = await ping();
-    if (!j) {
-      document.getElementById("dot").className = "dot";
-      document.getElementById("helper").textContent = "Starting helper…";
-      try {
-        const r = await chrome.runtime.sendNativeMessage(NATIVE_HOST, { cmd: "start" });
-        if (r?.ok) j = await ping();
-      } catch { /* native host not installed */ }
-    }
-    launching = null;
-    return j;
-  })();
+  try { return await (await helperFetch("/")).json(); } catch { return null; }
 }
 
 // Helper status dot in the header, plus the save folder in the footer.
 async function checkHelper() {
   const dot = document.getElementById("dot"), label = document.getElementById("helper");
-  const j = await ensureHelper();
+  const j = await ping();
   if (!j) {
     dot.className = "dot off"; label.textContent = "Helper offline";
     return false;
@@ -60,7 +40,7 @@ async function start(url, format, card) {
   setState(card, "running", `Starting ${format.toUpperCase()}…`, null);
   if (!(await checkHelper())) return setState(card, "error", OFFLINE);
   try {
-    const r = await fetch(`${API}/download`, {
+    const r = await helperFetch("/download", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ url, format }),
     });
@@ -68,7 +48,7 @@ async function start(url, format, card) {
     if (!r.ok) return setState(card, "error", j.error);
     const timer = setInterval(async () => {
       let s;
-      try { s = await (await fetch(`${API}/status/${j.job}`)).json(); }
+      try { s = await (await helperFetch(`/status/${j.job}`)).json(); }
       catch { clearInterval(timer); return setState(card, "error", OFFLINE); }
       if (s.status === "done") { clearInterval(timer); return setState(card, "done", `✔ Saved ${format.toUpperCase()} to ${s.out_dir}`); }
       if (s.status === "error") { clearInterval(timer); return setState(card, "error", "Error: " + s.error); }
@@ -115,7 +95,7 @@ async function start(url, format, card) {
 })();
 
 document.getElementById("open").onclick = async () => {
-  if (await checkHelper()) fetch(`${API}/open`).catch(() => { msg.textContent = OFFLINE; });
+  if (await checkHelper()) helperFetch("/open").catch(() => { msg.textContent = OFFLINE; });
   else msg.textContent = OFFLINE;
 };
 

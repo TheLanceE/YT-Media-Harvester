@@ -72,7 +72,7 @@ An empty value means the default folder.
 | --- | --- |
 | `install.bat` | Registers the native messaging host with Chrome (per user, no admin needed). |
 | `uninstall.bat` | Removes that registration. |
-| `start.bat` | Runs the helper by hand in a visible console window, without idle shutdown. Useful for debugging. |
+| `start.bat` | Runs the helper by hand in a visible console window, without idle shutdown. Useful for debugging. The extension still needs `install.bat` to get the helper's token. |
 | `native_host.bat` | Launcher Chrome calls; you don't run it yourself. |
 
 ## Troubleshooting
