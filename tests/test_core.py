@@ -95,6 +95,11 @@ def test_cookie_failure_explained(core, monkeypatch, tmp_path):
     assert job["status"] == "error" and job["error"].startswith("HTTP Error 403") and "cookies.txt" in job["error"]
 
 
+def test_chrome_decrypt_failure_explained(core, monkeypatch, tmp_path):
+    job, calls = run_real_job(core, monkeypatch, [BOT, "Failed to decrypt with DPAPI"], tmp_path)
+    assert job["error"].endswith(core.COOKIE_HINT)
+
+
 def test_cookies_file_used_when_set(core, monkeypatch, tmp_path):
     cookies = tmp_path / "cookies.txt"
     cookies.write_text("# Netscape HTTP Cookie File\n")

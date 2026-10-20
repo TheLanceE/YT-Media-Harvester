@@ -194,7 +194,7 @@ def run_job(job_id: str, url: str, fmt: str, dest: str):
             return
         except Exception as e:  # noqa: BLE001
             first_err = first_err or str(e)
-            if "cookiesfrombrowser" in extra and "cookie" in str(e).lower():
+            if "cookiesfrombrowser" in extra and any(w in str(e).lower() for w in ("cookie", "dpapi", "decrypt")):
                 # Reading Chrome's cookies failed, which says nothing about the video; explain instead of hiding it.
                 first_err = f"{first_err} {COOKIE_HINT}"
             if is_bot_check(str(e)) and attempts:
@@ -203,7 +203,7 @@ def run_job(job_id: str, url: str, fmt: str, dest: str):
                 continue
             if "403" not in str(e) and "reloaded" not in str(e):
                 break
-    if is_bot_check(first_err):
+    if is_bot_check(first_err) and COOKIE_HINT not in first_err:
         first_err = f"{first_err} {BOT_HINT}"
     jobs[job_id].update(status="error", error=first_err, finished_at=time.monotonic())
     partials.pop(job_id, None)
