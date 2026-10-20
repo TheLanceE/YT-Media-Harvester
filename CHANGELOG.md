@@ -2,6 +2,11 @@
 
 Versions follow the git tags. `extension/manifest.json` carries the same number in `version`, with the pre-release label in `version_name`.
 
+## Unreleased
+
+- The download engine moved from `server.py` into `core.py`, ready for the native-messaging transport (#11). "Open folder" also works on macOS and Linux.
+- Release workflow: Actions → Release builds the zip, SHA256SUMS and notes from this file and publishes the GitHub Release.
+
 ## v0.2.0-alpha (2026-10-20)
 
 Security and setup hardening. Tested on Windows 11 with Chrome: fresh install and downloads.

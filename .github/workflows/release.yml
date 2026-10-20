@@ -1,0 +1,51 @@
+name: Release
+
+# Run from the Actions tab (or the API) with a tag such as v0.2.0-alpha. The tag is created by the release itself,
+# on `target` (default: the commit the workflow runs on). Tags with a "-label" are published as pre-releases.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to create, e.g. v0.2.0-alpha"
+        required: true
+      target:
+        description: "Commit SHA to release (default: the branch head)"
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ inputs.tag }}
+    steps:
+      # Release tooling comes from the branch the workflow runs on; the files released come from `target`.
+      - uses: actions/checkout@v4
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.target || github.sha }}
+          path: src
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Tests
+        run: |
+          pip install -r src/requirements-dev.txt
+          python -m pytest -q src/tests
+
+      - name: Build
+        run: RELEASE_ROOT=src python scripts/build_release.py "$TAG" dist
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then echo "Release $TAG already exists"; exit 1; fi
+          pre=""; case "$TAG" in *-*) pre="--prerelease";; esac
+          gh release create "$TAG" dist/*.zip dist/SHA256SUMS.txt \
+            --target "$(git -C src rev-parse HEAD)" --title "$TAG" --notes-file dist/notes.md $pre
