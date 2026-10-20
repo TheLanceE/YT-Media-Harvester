@@ -151,14 +151,28 @@ def ydl_opts(fmt: str, job_id: str, dest: str) -> dict:
     return opts
 
 
+COOKIE_HINT = (
+    "Retrying with your Chrome cookies didn't work either: Chrome 127+ on Windows locks them while Chrome is open. "
+    'Export a cookies.txt for youtube.com and set "cookies_file" to its path in config.json.'
+)
+
+
+def cookie_attempt() -> dict:
+    """The last retry rung: a cookies.txt from config.json if one is set, else Chrome's own cookie store."""
+    path = load_config().get("cookies_file") or ""
+    if path and os.path.isfile(path):
+        return {"cookiefile": path}
+    return {"cookiesfrombrowser": ("chrome",)}
+
+
 def run_job(job_id: str, url: str, fmt: str, dest: str):
-    # On 403, retry with other YouTube player clients, then with browser cookies.
+    # On 403, retry with other YouTube player clients, then with cookies.
     attempts = [
         {},
         {},  # plain retry: "page needs to be reloaded" is usually transient
         {"extractor_args": {"youtube": {"player_client": ["tv", "web_safari"]}}},
         {"extractor_args": {"youtube": {"player_client": ["android_vr", "mweb"]}}},
-        {"cookiesfrombrowser": ("chrome",)},
+        cookie_attempt(),
     ]
     first_err = ""
     for extra in attempts:
@@ -169,6 +183,9 @@ def run_job(job_id: str, url: str, fmt: str, dest: str):
             return
         except Exception as e:  # noqa: BLE001
             first_err = first_err or str(e)
+            if "cookiesfrombrowser" in extra and "cookie" in str(e).lower():
+                # Reading Chrome's cookies failed, which says nothing about the video; explain instead of hiding it.
+                first_err = f"{first_err} {COOKIE_HINT}"
             if "403" not in str(e) and "reloaded" not in str(e):
                 break
     jobs[job_id].update(status="error", error=first_err, finished_at=time.monotonic())

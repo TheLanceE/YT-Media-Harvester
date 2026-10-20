@@ -79,6 +79,7 @@ An empty value means the default folder.
 
 - **"Helper couldn't start"**: run `install.bat`, reload the extension, and check that `..\.venv` exists with yt-dlp installed. Details are in `helper.log`.
 - **403 / "Sign in to confirm" errors**: the helper already retries with other clients and your Chrome cookies. Updating yt-dlp usually fixes persistent failures: `..\.venv\Scripts\pip install -U yt-dlp`.
+- **"Chrome 127+ on Windows locks them" in an error**: Chrome now encrypts its cookies so other programs can't read them while it runs. Export a `cookies.txt` for youtube.com with a cookies.txt browser extension, then add its path to `config.json`, for example `"cookies_file": "D:\\cookies\\youtube.txt"`. The helper then uses that file for its last retry instead of Chrome's cookies.
 - **No cover art or tags**: ffmpeg is missing from `PATH`.
 - **Browse… does nothing**: the folder picker can open behind Chrome. Check the taskbar, or type the path instead.
 - **Port 8765 in use**: another program is using the helper's port. Close it, or change `PORT` in both `server.py` and `native_host.py` and `API` in the extension's JS files, plus `host_permissions` in `manifest.json`.

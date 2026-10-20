@@ -47,7 +47,7 @@ The server exits on its own once 30 minutes pass with no requests and no running
    - **MP4**: best MP4 video + M4A audio, merged to MP4, with chapters.
    - Both: thumbnail downloaded and converted to JPG, metadata written with `FFmpegMetadata`, cover embedded with `EmbedThumbnail`. Files are named `%(title)s [%(id)s].%(ext)s`, so two videos with the same title don't overwrite each other.
    - Node is passed to yt-dlp as its JavaScript runtime when found on `PATH`.
-4. On a 403 or "page needs to be reloaded" error, the job retries in order: plain retry, `tv`/`web_safari` player clients, `android_vr`/`mweb` clients, then cookies from Chrome. Any other error stops immediately. The first error message is reported.
+4. On a 403 or "page needs to be reloaded" error, the job retries in order: plain retry, `tv`/`web_safari` player clients, `android_vr`/`mweb` clients, then cookies (the `cookies_file` from `config.json` if set, otherwise Chrome's cookie store). Any other error stops immediately. The first error message is reported; if reading Chrome's cookies failed, a hint about Chrome 127+ cookie encryption and `cookies_file` is added.
 
 Jobs live in memory only. Restarting the helper forgets them.
 
