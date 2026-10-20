@@ -49,3 +49,16 @@ jobs:
         run: |
           pip install -r requirements-dev.txt
           python -m pytest -q tests
+
+      - name: install.bat and native host smoke test
+        shell: cmd
+        run: |
+          call install.bat < nul
+          if errorlevel 1 exit /b 1
+          reg query "HKCU\Software\Google\Chrome\NativeMessagingHosts\com.yt_tab_downloader.helper" || exit /b 1
+          .venv\Scripts\python.exe tests\native_smoke.py
+
+      - name: Stop the helper
+        if: always()
+        shell: pwsh
+        run: Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*server.py*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }

@@ -27,7 +27,7 @@ YT Media Harvester has two halves: a Manifest V3 Chrome extension that provides 
 | `extension/options.js` | Settings page for the download folder. |
 | `server.py` | The helper. HTTP API, download jobs in background threads, folder config, idle shutdown. |
 | `native_host.py` | Native messaging host. Also installs and uninstalls its own registration. |
-| `*.bat` | Wrappers that run the Python files with `..\.venv\Scripts\python.exe`. |
+| `*.bat` | Wrappers that run the Python files with `.venv\Scripts\python.exe` in the repo, falling back to `..\.venv`. `install.bat` creates the venv if neither exists and installs `requirements.txt`. |
 
 ## Starting the helper
 
@@ -79,4 +79,4 @@ These are created at runtime and are ignored by git: `config.json` (download fol
 
 ## Platform limits
 
-The helper is Windows-only today: registration uses the Windows registry (`winreg`), `/open` uses `os.startfile`, and the `.bat` wrappers assume the `..\.venv` layout. Only Chrome's registry key is written, so other Chromium browsers (Edge, Brave) need their own registration.
+The helper is Windows-only today: registration uses the Windows registry (`winreg`), `/open` uses `os.startfile`, and the `.bat` wrappers are Windows batch files. Only Chrome's registry key is written, so other Chromium browsers (Edge, Brave) need their own registration.
