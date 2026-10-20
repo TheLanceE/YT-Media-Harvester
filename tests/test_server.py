@@ -21,7 +21,8 @@ def server(tmp_path_factory):
 
     srv.CONFIG = str(cfg)
     srv.auth_token = auth.token()
-    srv.run_job = lambda *a: None  # never start a real download
+    srv._real_run_job = srv.run_job
+    srv.run_job = lambda *a: None  # requests never start a real download
     httpd = ThreadingHTTPServer(("127.0.0.1", 0), srv.Handler)
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
     yield srv, httpd.server_address[1]
@@ -148,3 +149,57 @@ def test_set_out_dir_rejects_unwritable(server, tmp_path):
     blocker.write_text("x")
     with pytest.raises(ValueError):
         srv.set_out_dir(str(blocker / "sub"))
+
+
+def fake_ydl(errors):
+    """A YoutubeDL stand-in whose extract_info raises the next error in turn (None = success)."""
+    calls = []
+
+    class FakeYDL:
+        def __init__(self, opts):
+            calls.append(opts)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def extract_info(self, url, download):
+            err = errors[len(calls) - 1]
+            if err:
+                raise Exception(err)
+            return {"title": "ok"}
+
+    return FakeYDL, calls
+
+
+def run_real_job(srv, monkeypatch, errors, tmp_path):
+    ydl, calls = fake_ydl(errors)
+    monkeypatch.setattr(srv, "YoutubeDL", ydl)
+    srv.jobs["j"] = {"status": "running"}
+    srv._real_run_job("j", "https://youtu.be/x", "mp3", str(tmp_path))
+    return srv.jobs.pop("j"), calls
+
+
+def test_cookie_failure_explained(server, monkeypatch, tmp_path):
+    srv, _ = server
+    errors = ["HTTP Error 403"] * 4 + ["Failed to decrypt cookie with DPAPI"]
+    job, calls = run_real_job(srv, monkeypatch, errors, tmp_path)
+    assert len(calls) == 5 and "cookiesfrombrowser" in calls[-1]
+    assert job["status"] == "error" and job["error"].startswith("HTTP Error 403") and "cookies.txt" in job["error"]
+
+
+def test_cookies_file_used_when_set(server, monkeypatch, tmp_path):
+    srv, _ = server
+    cookies = tmp_path / "cookies.txt"
+    cookies.write_text("# Netscape HTTP Cookie File\n")
+    monkeypatch.setattr(srv, "load_config", lambda: {"cookies_file": str(cookies)})
+    job, calls = run_real_job(srv, monkeypatch, ["HTTP Error 403"] * 4 + [None], tmp_path)
+    assert job["status"] == "done" and calls[-1]["cookiefile"] == str(cookies)
+
+
+def test_non_403_error_stops_retrying(server, monkeypatch, tmp_path):
+    srv, _ = server
+    job, calls = run_real_job(srv, monkeypatch, ["Video unavailable"], tmp_path)
+    assert len(calls) == 1 and job["error"] == "Video unavailable"
