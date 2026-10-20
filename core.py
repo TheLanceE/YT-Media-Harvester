@@ -222,8 +222,11 @@ def attempt_download(job_id: str, url: str, fmt: str, dest: str, cookie_path: st
         cookie_attempt(cookie_path),
     ]
     first_err = ""
+    cookie_err = ""  # the cookie rung's own error, when it got past the bot check
+    cookie_retried = False
     while attempts:
         extra = attempts.pop(0)
+        with_cookies = "cookiefile" in extra or "cookiesfrombrowser" in extra
         try:
             with YoutubeDL({**ydl_opts(fmt, job_id, dest), **extra}) as ydl:
                 info = ydl.extract_info(url, download=True)
@@ -236,13 +239,22 @@ def attempt_download(job_id: str, url: str, fmt: str, dest: str, cookie_path: st
             if "cookiesfrombrowser" in extra and unreadable:
                 # Reading Chrome's cookies failed, which says nothing about the video; explain instead of hiding it.
                 first_err = f"{first_err} {COOKIE_HINT}"
+            if with_cookies and not is_bot_check(str(e)) and not unreadable:
+                cookie_err = str(e)
+                if "reloaded" in cookie_err and not cookie_retried:
+                    cookie_retried = True  # transient, like the plain retry at the top of the ladder
+                    attempts.append(extra)
+                    continue
             if is_bot_check(str(e)) and attempts:
                 # YouTube is rate-limiting this IP: other player clients get the same answer, signed-in cookies don't.
                 attempts = attempts[-1:]
                 continue
             if "403" not in str(e) and "reloaded" not in str(e):
                 break
-    if is_bot_check(first_err) and COOKIE_HINT not in first_err:
+    if is_bot_check(first_err) and cookie_err:
+        # The cookies got past the bot check; what stopped them is the more useful error.
+        first_err = f"YouTube accepted your cookies but then failed: {cookie_err}"
+    elif is_bot_check(first_err) and COOKIE_HINT not in first_err:
         first_err = f"{first_err} {BOT_HINT}"
     jobs[job_id].update(status="error", error=first_err, finished_at=time.monotonic())
     partials.pop(job_id, None)

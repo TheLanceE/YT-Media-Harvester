@@ -202,3 +202,16 @@ def test_cookies_file_beats_browser_cookies(core, monkeypatch, tmp_path):
 def test_start_job_rejects_malformed_cookies(core):
     with pytest.raises(ValueError):
         core.start_job("https://youtu.be/dQw4w9WgXcQ", "mp3", "SID=abc")
+
+
+RELOAD = "ERROR: [youtube] x: The page needs to be reloaded."
+
+
+def test_cookie_rung_retries_reload_once(core, monkeypatch, tmp_path):
+    job, calls = run_real_job(core, monkeypatch, [BOT, RELOAD, None], tmp_path)
+    assert job["status"] == "done" and len(calls) == 3 and all("cookiesfrombrowser" in c for c in calls[1:])
+
+
+def test_cookie_rung_error_reported_when_past_bot_check(core, monkeypatch, tmp_path):
+    job, calls = run_real_job(core, monkeypatch, [BOT, RELOAD, RELOAD], tmp_path)
+    assert len(calls) == 3 and job["error"] == f"YouTube accepted your cookies but then failed: {RELOAD}"
