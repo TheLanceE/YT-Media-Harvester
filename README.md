@@ -26,6 +26,8 @@ The extension is a small UI. The actual downloading is done by a local Python he
 
 ## Setup
 
+Get the code: download the latest `YT-Media-Harvester-vX.Y.Z.zip` from [Releases](https://github.com/TheLanceE/YT-Media-Harvester/releases) and unzip it, or clone the repo.
+
 1. **Install Python 3.10+** from [python.org](https://www.python.org/downloads/) and tick **Add python.exe to PATH**. Install ffmpeg and Node.js too (see Requirements).
 
 2. **Load the extension:** open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked** and select the `extension/` folder.
@@ -75,6 +77,11 @@ An empty value means the default folder.
 - **No cover art or tags**: ffmpeg is missing from `PATH`.
 - **Browse… does nothing**: the folder picker can open behind Chrome. Check the taskbar, or type the path instead.
 - **Port 8765 in use**: another program is using the helper's port. Close it, or change `PORT` in both `server.py` and `native_host.py` and `API` in the extension's JS files, plus `host_permissions` in `manifest.json`.
+
+## Making a release
+
+1. Bump `version` (and `version_name` for pre-releases) in `extension/manifest.json`, and turn `## Unreleased` in `CHANGELOG.md` into `## vX.Y.Z[-label] (date)`. Merge that PR.
+2. In **Actions → Release → Run workflow**, enter the tag (e.g. `v0.3.0-alpha`). It runs the tests, checks the manifest and changelog match the tag, builds the zip and `SHA256SUMS.txt`, creates the tag and publishes the release. Tags with a `-label` are marked pre-release.
 
 ## How it works
 
