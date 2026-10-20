@@ -91,9 +91,9 @@ A is still worth doing first. It is a few hours of work, closes the hole today, 
 ## Action items
 
 1. [x] Harden `server.py`: exact extension origin on all routes, no wildcard CORS, token header, `uuid4()` job IDs.
-2. [ ] Split `server.py` into `core.py` (`ydl_opts`, `run_job`, config) and transports.
+2. [x] Split `server.py` into `core.py` (`ydl_opts`, `run_job`, config) and transports.
 3. [ ] Add the host job loop and message protocol. Route all yt-dlp and ffmpeg output away from stdout.
 4. [ ] Add a background service worker that owns `connectNative` and stores jobs in `chrome.storage.session`. Point the popup and options page at it.
 5. [ ] Delete partial files when the host's stdin closes mid-job.
 6. [ ] Remove `server.py`, the port check and the `host_permissions` entry. Update ARCHITECTURE.md.
-7. [ ] Follow-up: Firefox host manifest and `browser_specific_settings.gecko.id`. Make `/open` cross-platform.
+7. [ ] Follow-up: Firefox host manifest and `browser_specific_settings.gecko.id`. ~~Make `/open` cross-platform~~ (done in `core.open_folder`).

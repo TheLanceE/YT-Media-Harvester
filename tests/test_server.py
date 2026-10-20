@@ -1,4 +1,4 @@
-"""Unit tests for the helper's request checks. yt-dlp is never asked to download anything."""
+"""Unit tests for the helper (core.py and its HTTP transport in server.py). yt-dlp is never asked to download anything."""
 import http.client
 import json
 import os
@@ -17,16 +17,27 @@ import auth  # noqa: E402
 def server(tmp_path_factory):
     cfg = tmp_path_factory.mktemp("cfg") / "config.json"
     auth.CONFIG = str(cfg)  # keep the developer's real config.json untouched
-    import server as srv
+    import core
+    import server
 
-    srv.CONFIG = str(cfg)
-    srv.auth_token = auth.token()
-    srv._real_run_job = srv.run_job
-    srv.run_job = lambda *a: None  # requests never start a real download
-    httpd = ThreadingHTTPServer(("127.0.0.1", 0), srv.Handler)
+    core.CONFIG = str(cfg)
+    server.auth_token = auth.token()
+    core._real_run_job = core.run_job
+    core.run_job = lambda *a: None  # requests never start a real download
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), server.Handler)
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
-    yield srv, httpd.server_address[1]
+    yield Helper(core, server), httpd.server_address[1]
     httpd.shutdown()
+
+
+class Helper:
+    """Both modules under one name: tests read core's functions and the HTTP server's settings."""
+
+    def __init__(self, core, server):
+        self.core, self.server = core, server
+
+    def __getattr__(self, name):
+        return getattr(self.core, name) if hasattr(self.core, name) else getattr(self.server, name)
 
 
 def request(port, method, path, body=None, headers=None, token=True, srv=None):
@@ -176,7 +187,7 @@ def fake_ydl(errors):
 
 def run_real_job(srv, monkeypatch, errors, tmp_path):
     ydl, calls = fake_ydl(errors)
-    monkeypatch.setattr(srv, "YoutubeDL", ydl)
+    monkeypatch.setattr(srv.core, "YoutubeDL", ydl)
     srv.jobs["j"] = {"status": "running"}
     srv._real_run_job("j", "https://youtu.be/x", "mp3", str(tmp_path))
     return srv.jobs.pop("j"), calls
@@ -194,7 +205,7 @@ def test_cookies_file_used_when_set(server, monkeypatch, tmp_path):
     srv, _ = server
     cookies = tmp_path / "cookies.txt"
     cookies.write_text("# Netscape HTTP Cookie File\n")
-    monkeypatch.setattr(srv, "load_config", lambda: {"cookies_file": str(cookies)})
+    monkeypatch.setattr(srv.core, "load_config", lambda: {"cookies_file": str(cookies)})
     job, calls = run_real_job(srv, monkeypatch, ["HTTP Error 403"] * 4 + [None], tmp_path)
     assert job["status"] == "done" and calls[-1]["cookiefile"] == str(cookies)
 

@@ -25,7 +25,8 @@ YT Media Harvester has two halves: a Manifest V3 Chrome extension that provides 
 | `extension/manifest.json` | MV3 manifest. Permissions: `tabs`, `nativeMessaging`, and host access to `http://127.0.0.1:8765/*`. The `key` field pins the extension ID so the native host can allow it. |
 | `extension/popup.js` | Lists open YouTube watch tabs, starts downloads, polls job status, shows the helper state and save folder. |
 | `extension/options.js` | Settings page for the download folder. |
-| `server.py` | The helper. HTTP API, download jobs in background threads, folder config, idle shutdown. |
+| `core.py` | The download engine: folder config, URL checks, jobs in background threads, the yt-dlp pipeline and retry ladder. Transport-free, so the HTTP server and the planned native-messaging host share it. |
+| `server.py` | The helper's HTTP transport: auth, CORS and Host checks, the HTTP API, idle shutdown. Calls into `core.py`. |
 | `native_host.py` | Native messaging host. Also installs and uninstalls its own registration. |
 | `*.bat` | Wrappers that run the Python files with `.venv\Scripts\python.exe` in the repo, falling back to `..\.venv`. `install.bat` creates the venv if neither exists and installs `requirements.txt`. |
 
@@ -79,4 +80,4 @@ These are created at runtime and are ignored by git: `config.json` (download fol
 
 ## Platform limits
 
-The helper is Windows-only today: registration uses the Windows registry (`winreg`), `/open` uses `os.startfile`, and the `.bat` wrappers are Windows batch files. Only Chrome's registry key is written, so other Chromium browsers (Edge, Brave) need their own registration.
+The helper is Windows-only today: registration uses the Windows registry (`winreg`), and the `.bat` wrappers are Windows batch files. Only Chrome's registry key is written, so other Chromium browsers (Edge, Brave) need their own registration.
