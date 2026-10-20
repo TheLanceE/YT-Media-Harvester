@@ -4,7 +4,7 @@ A Chrome extension that downloads the YouTube videos you have open as **MP3** or
 
 The extension is a small UI. The actual downloading is done by a local Python helper built on [yt-dlp](https://github.com/yt-dlp/yt-dlp), which the extension starts automatically when you need it.
 
-> **Status:** alpha (v0.2.0). Windows and Google Chrome only for now.
+> **Status:** beta (v0.3.0). Windows and Google Chrome only for now.
 
 ## Features
 
