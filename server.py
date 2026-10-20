@@ -8,6 +8,7 @@ import threading
 import time
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import urlsplit
 
 from yt_dlp import YoutubeDL
 
@@ -22,6 +23,10 @@ HOST, PORT = "127.0.0.1", 8765
 BASE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_OUT_DIR = os.path.join(BASE, "downloads")
 CONFIG = auth.CONFIG  # {"out_dir": "D:\\Music"}; written by the extension's Settings page
+ALLOWED_HOSTS = {f"127.0.0.1:{PORT}", f"localhost:{PORT}"}  # anything else is DNS rebinding
+YOUTUBE_HOSTS = {"youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com"}
+JOB_TTL = 600  # seconds a finished job's status stays available
+MAX_BODY = 64 * 1024
 picker_lock = threading.Lock()
 
 
@@ -74,15 +79,49 @@ jobs: dict[str, dict] = {}
 last_request = time.monotonic()
 
 
+def is_youtube_video(url: str) -> bool:
+    """A watch, shorts or youtu.be link on a real YouTube host; substring checks let other sites through."""
+    try:
+        parts = urlsplit(url)
+    except ValueError:
+        return False
+    host = (parts.hostname or "").lower()
+    if parts.scheme not in ("http", "https") or parts.username or parts.password or parts.port not in (None, 80, 443):
+        return False
+    if host == "youtu.be":
+        return len(parts.path.strip("/")) > 0
+    if host in YOUTUBE_HOSTS:
+        return (parts.path == "/watch" and "v=" in parts.query) or parts.path.startswith("/shorts/")
+    return False
+
+
+def percent(d: dict) -> str:
+    """Progress as "42.0%" from byte counts; yt-dlp's _percent_str can carry ANSI colour codes."""
+    total = d.get("total_bytes") or d.get("total_bytes_estimate")
+    if not total:
+        return ""
+    return f"{min(100.0, 100.0 * (d.get('downloaded_bytes') or 0) / total):.1f}%"
+
+
+def prune_jobs(now: float | None = None):
+    now = time.monotonic() if now is None else now
+    for job_id, job in list(jobs.items()):
+        if job.get("finished_at") is not None and now - job["finished_at"] > JOB_TTL:
+            jobs.pop(job_id, None)
+
+
 def ydl_opts(fmt: str, job_id: str, dest: str) -> dict:
     def hook(d):
+        job = jobs[job_id]
         if d["status"] == "downloading":
-            jobs[job_id]["progress"] = (d.get("_percent_str") or "").strip()
+            job["progress"] = percent(d)
         elif d["status"] == "finished":
-            jobs[job_id]["progress"] = "converting"
+            # MP4s are fetched as two streams (video, then audio); "part" lets the popup say which one.
+            job["part"] = job.get("part", 1) + 1
+            job["progress"] = "converting"
 
     opts = {
-        "outtmpl": os.path.join(dest, "%(title)s.%(ext)s"),
+        "outtmpl": os.path.join(dest, "%(title)s [%(id)s].%(ext)s"),  # the id keeps same-titled videos apart
         "noplaylist": True,
         "quiet": True,
         "no_warnings": True,
@@ -126,13 +165,13 @@ def run_job(job_id: str, url: str, fmt: str, dest: str):
         try:
             with YoutubeDL({**ydl_opts(fmt, job_id, dest), **extra}) as ydl:
                 info = ydl.extract_info(url, download=True)
-            jobs[job_id].update(status="done", title=info.get("title"), progress="100%")
+            jobs[job_id].update(status="done", title=info.get("title"), progress="100%", finished_at=time.monotonic())
             return
         except Exception as e:  # noqa: BLE001
             first_err = first_err or str(e)
             if "403" not in str(e) and "reloaded" not in str(e):
                 break
-    jobs[job_id].update(status="error", error=first_err)
+    jobs[job_id].update(status="error", error=first_err, finished_at=time.monotonic())
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -149,19 +188,35 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def _authorized(self) -> bool:
-        """Only the extension: its own origin (or none, which Chrome may omit for extension pages) and the token.
+        """Only the extension, reached as localhost (a rebound DNS name sends its own Host),
+        with its own origin (or none, which Chrome may omit for extension pages) and the token.
         A web page can't send the token header without a CORS preflight, which only allows our origin."""
+        if self.headers.get("Host", "").lower() not in ALLOWED_HOSTS:
+            return False
         origin = self.headers.get("Origin")
         if origin is not None and origin != auth.ORIGIN:
             return False
         return hmac.compare_digest(self.headers.get(auth.HEADER, "").encode(), auth_token.encode())
 
     def do_OPTIONS(self):
-        self._send(204 if self.headers.get("Origin") == auth.ORIGIN else 403, {})
+        ok = self.headers.get("Origin") == auth.ORIGIN and self.headers.get("Host", "").lower() in ALLOWED_HOSTS
+        self._send(204 if ok else 403, {})
+
+    def _json_body(self) -> dict | None:
+        """The request body as a JSON object, or None if it is missing, too big or not valid JSON."""
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+            if not 0 <= length <= MAX_BODY:
+                return None
+            body = json.loads(self.rfile.read(length) or b"{}")
+        except (ValueError, OSError):
+            return None
+        return body if isinstance(body, dict) else None
 
     def do_GET(self):
         if not self._authorized():
             return self._send(401, {"error": "unauthorized"})
+        prune_jobs()
         if self.path.startswith("/status/"):
             job = jobs.get(self.path.rsplit("/", 1)[1])
             return self._send(200 if job else 404, job or {"error": "unknown job"})
@@ -173,7 +228,9 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         if not self._authorized():
             return self._send(401, {"error": "unauthorized"})
-        body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
+        body = self._json_body()
+        if body is None:
+            return self._send(400, {"error": "request body must be a JSON object"})
         if self.path in ("/config", "/choose-folder"):
             try:
                 if self.path == "/choose-folder":
@@ -189,10 +246,11 @@ class Handler(BaseHTTPRequestHandler):
         if self.path != "/download":
             return self._send(404, {"error": "not found"})
         url, fmt = body.get("url", ""), body.get("format", "mp3")
-        if "youtube.com/watch" not in url and "youtu.be/" not in url:
+        if not isinstance(url, str) or not is_youtube_video(url):
             return self._send(400, {"error": "not a YouTube video URL"})
         if fmt not in ("mp3", "mp4"):
             return self._send(400, {"error": "format must be mp3 or mp4"})
+        prune_jobs()
         job_id = uuid.uuid4().hex
         dest = out_dir()
         try:

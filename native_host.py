@@ -17,6 +17,7 @@ import auth
 
 NAME = "com.yt_tab_downloader.helper"
 HOST, PORT = "127.0.0.1", 8765
+LOG_MAX_BYTES = 1024 * 1024  # helper.log starts over once it grows past this
 IDLE_MINUTES = 30  # the server stops itself after this long with no requests and no running job
 BASE = os.path.dirname(os.path.abspath(__file__))
 MANIFEST = os.path.join(BASE, f"{NAME}.json")
@@ -34,7 +35,9 @@ def server_up() -> bool:
 def start_server() -> dict:
     if server_up():
         return {"ok": True, "started": False, "token": auth.token()}
-    log = open(os.path.join(BASE, "helper.log"), "ab")
+    log_path = os.path.join(BASE, "helper.log")
+    big = os.path.exists(log_path) and os.path.getsize(log_path) > LOG_MAX_BYTES
+    log = open(log_path, "wb" if big else "ab")
     cmd = [sys.executable, os.path.join(BASE, "server.py"), "--idle-minutes", str(IDLE_MINUTES)]
     kw = {"cwd": BASE, "stdin": subprocess.DEVNULL, "stdout": log, "stderr": log, "close_fds": True}
     if os.name == "nt":
@@ -47,6 +50,7 @@ def start_server() -> dict:
             subprocess.Popen(cmd, creationflags=flags, **kw)
     else:
         subprocess.Popen(cmd, start_new_session=True, **kw)
+    log.close()  # the server has its own copy of the handle
     for _ in range(60):  # importing yt_dlp takes a few seconds
         time.sleep(0.25)
         if server_up():

@@ -45,7 +45,7 @@ The server exits on its own once 30 minutes pass with no requests and no running
 3. The job runs yt-dlp with:
    - **MP3**: `bestaudio`, extracted to MP3 at 192 kbps.
    - **MP4**: best MP4 video + M4A audio, merged to MP4, with chapters.
-   - Both: thumbnail downloaded and converted to JPG, metadata written with `FFmpegMetadata`, cover embedded with `EmbedThumbnail`. Files are named `%(title)s.%(ext)s`.
+   - Both: thumbnail downloaded and converted to JPG, metadata written with `FFmpegMetadata`, cover embedded with `EmbedThumbnail`. Files are named `%(title)s [%(id)s].%(ext)s`, so two videos with the same title don't overwrite each other.
    - Node is passed to yt-dlp as its JavaScript runtime when found on `PATH`.
 4. On a 403 or "page needs to be reloaded" error, the job retries in order: plain retry, `tv`/`web_safari` player clients, `android_vr`/`mweb` clients, then cookies from Chrome. Any other error stops immediately. The first error message is reported.
 
@@ -60,7 +60,7 @@ All responses are JSON. Base URL `http://127.0.0.1:8765`. Every request needs an
 | GET | `/` | | `{ok, out_dir, default_out_dir}` |
 | GET | `/open` | | Opens the download folder in Explorer, then same as `/`. |
 | POST | `/download` | `{url, format: "mp3" \| "mp4"}` | `202 {job}`, or `400 {error}` |
-| GET | `/status/<job>` | | `{status: "running" \| "done" \| "error", progress, out_dir, title?, error?}`. `progress` is a percentage string or `"converting"`. |
+| GET | `/status/<job>` | | `{status: "running" \| "done" \| "error", progress, out_dir, title?, error?}`. `progress` is a percentage string or `"converting"`; `part` is 2 while an MP4's audio stream downloads. Finished jobs are dropped after 10 minutes. |
 | POST | `/config` | `{out_dir}` (empty resets) | `{ok, out_dir}`, or `400 {error}` |
 | POST | `/choose-folder` | `{}` | Shows the Windows folder picker (tkinter). `{ok, out_dir}` or `{ok: false, cancelled: true}` |
 
@@ -68,13 +68,14 @@ All responses are JSON. Base URL `http://127.0.0.1:8765`. Every request needs an
 
 - The server binds to `127.0.0.1` only, so nothing outside the machine can reach it.
 - Every route requires the `X-Helper-Token` header, and a request whose `Origin` is set to anything other than this extension's `chrome-extension://` origin is rejected. A web page can't send a custom header without a CORS preflight, and preflights are refused for every origin except the extension's, so pages can't start downloads, open the folder, or read the folder path.
+- Requests must arrive with `Host: 127.0.0.1:8765` (or `localhost:8765`), which blocks DNS-rebinding pages. Download URLs are parsed and must be a video on `youtube.com`, `www.`/`m.`/`music.youtube.com` or `youtu.be`. Malformed or oversized (over 64 KB) bodies get a `400`.
 - The token lives in `config.json` and reaches the extension only through the native messaging host. Any local program that can read your files can still read it; the helper only defends against web pages.
 - Job IDs are random (`uuid4`).
 - The native messaging host only accepts the pinned extension ID.
 
 ## Local files
 
-These are created at runtime and are ignored by git: `config.json` (download folder and token), `helper.log` (helper output), `com.yt_tab_downloader.helper.json` (native host manifest, written by `install.bat`), and `downloads/` (default output folder).
+These are created at runtime and are ignored by git: `config.json` (download folder and token), `helper.log` (helper output, started over when it passes 1 MB), `com.yt_tab_downloader.helper.json` (native host manifest, written by `install.bat`), and `downloads/` (default output folder).
 
 ## Platform limits
 

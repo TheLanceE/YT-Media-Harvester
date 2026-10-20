@@ -15,10 +15,14 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install Python dependencies
+        run: pip install -r requirements-dev.txt
+
       - name: Lint Python
-        run: |
-          pip install ruff
-          ruff check .
+        run: ruff check .
+
+      - name: Unit tests
+        run: python -m pytest -q tests
 
       - name: Compile Python
         run: python -m compileall -q -x "/\.venv/" .
@@ -31,3 +35,17 @@ jobs:
         run: |
           for f in extension/*.js; do node --check "$f"; done
           node -e 'const m = require("./extension/manifest.json"); if (m.manifest_version !== 3) throw new Error("manifest_version must be 3")'
+
+  test-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Unit tests
+        run: |
+          pip install -r requirements-dev.txt
+          python -m pytest -q tests
