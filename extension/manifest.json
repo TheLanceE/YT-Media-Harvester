@@ -9,7 +9,11 @@
     "tabs",
     "nativeMessaging",
     "storage",
-    "notifications"
+    "notifications",
+    "cookies"
+  ],
+  "host_permissions": [
+    "*://*.youtube.com/*"
   ],
   "background": {
     "service_worker": "background.js"

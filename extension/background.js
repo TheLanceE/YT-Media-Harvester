@@ -84,9 +84,18 @@ function notify(job) {
   });
 }
 
+// The browser's youtube.com cookies, for the helper's last retry when YouTube asks to sign in. Reading them here
+// avoids Chrome's cookie encryption and Edge's locked cookie file; they only go to the local helper.
+async function youtubeCookies() {
+  const all = await chrome.cookies.getAll({ domain: "youtube.com" }).catch(() => []);
+  return all.map(c => ({ domain: c.hostOnly ? c.domain : "." + c.domain.replace(/^\./, ""), path: c.path,
+                         secure: c.secure, expires: c.expirationDate || 0, name: c.name, value: c.value }));
+}
+
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   if (sender.id !== chrome.runtime.id || typeof msg?.cmd !== "string") return;
-  call(msg.cmd, msg.args)
+  const args = msg.cmd === "download" ? youtubeCookies().then(cookies => ({ ...msg.args, cookies })) : Promise.resolve(msg.args);
+  args.then(a => call(msg.cmd, a))
     .then(async r => {
       if (msg.cmd === "download") {
         await updateJobs(jobs => {

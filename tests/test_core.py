@@ -1,4 +1,6 @@
 """Unit tests for core.py, the download engine. yt-dlp is never asked to download anything."""
+import os
+
 import pytest
 
 import core as _core
@@ -118,7 +120,7 @@ def test_bot_check_jumps_to_cookies(core, monkeypatch, tmp_path):
 
 def test_bot_check_failure_explained(core, monkeypatch, tmp_path):
     job, calls = run_real_job(core, monkeypatch, [BOT, BOT], tmp_path)
-    assert len(calls) == 2 and job["error"].startswith(BOT) and "cookies_file" in job["error"]
+    assert len(calls) == 2 and job["error"].startswith(BOT) and job["error"].endswith(core.BOT_HINT)
 
 
 def test_non_403_error_stops_retrying(core, monkeypatch, tmp_path):
@@ -153,3 +155,50 @@ def test_remove_partials_cleans_streams_outputs_and_cover(core, tmp_path):
 def test_finished_job_forgets_its_files(core, monkeypatch, tmp_path):
     job, _ = run_real_job(core, monkeypatch, [None], tmp_path)
     assert job["status"] == "done" and "j" not in core.partials
+
+
+BROWSER_COOKIES = [
+    {"domain": ".youtube.com", "path": "/", "secure": True, "expires": 1999999999.5, "name": "SID", "value": "abc"},
+    {"domain": "www.youtube.com", "path": "/", "secure": False, "expires": 0, "name": "PREF", "value": "f1=1"},
+    {"domain": ".evil.example", "path": "/", "name": "X", "value": "1"},  # not YouTube: dropped
+    {"domain": ".youtube.com", "path": "/", "name": "BAD", "value": "a\tb"},  # would break the file: dropped
+]
+
+
+def test_cookie_file_from_browser_cookies(core):
+    path = core.write_cookie_file(BROWSER_COOKIES)
+    try:
+        lines = open(path, encoding="utf-8").read().splitlines()
+    finally:
+        os.remove(path)
+    assert lines == [
+        "# Netscape HTTP Cookie File",
+        ".youtube.com\tTRUE\t/\tTRUE\t1999999999\tSID\tabc",
+        "www.youtube.com\tFALSE\t/\tFALSE\t0\tPREF\tf1=1",
+    ]
+
+
+def test_bot_check_uses_browser_cookies_then_deletes_them(core, monkeypatch, tmp_path):
+    ydl, calls = fake_ydl([BOT, None])
+    monkeypatch.setattr(core, "YoutubeDL", ydl)
+    core.jobs["j"] = {"status": "running"}
+    REAL_RUN_JOB("j", "https://youtu.be/x", "mp3", str(tmp_path), BROWSER_COOKIES)
+    assert core.jobs.pop("j")["status"] == "done"
+    cookie_path = calls[-1]["cookiefile"]
+    assert os.path.basename(cookie_path).startswith("ytdl-cookies-") and not os.path.exists(cookie_path)
+
+
+def test_cookies_file_beats_browser_cookies(core, monkeypatch, tmp_path):
+    cookies = tmp_path / "cookies.txt"
+    cookies.write_text("# Netscape HTTP Cookie File\n")
+    monkeypatch.setattr(core, "load_config", lambda: {"cookies_file": str(cookies)})
+    ydl, calls = fake_ydl([BOT, None])
+    monkeypatch.setattr(core, "YoutubeDL", ydl)
+    core.jobs["j"] = {"status": "running"}
+    REAL_RUN_JOB("j", "https://youtu.be/x", "mp3", str(tmp_path), BROWSER_COOKIES)
+    assert calls[-1]["cookiefile"] == str(cookies)
+
+
+def test_start_job_rejects_malformed_cookies(core):
+    with pytest.raises(ValueError):
+        core.start_job("https://youtu.be/dQw4w9WgXcQ", "mp3", "SID=abc")
