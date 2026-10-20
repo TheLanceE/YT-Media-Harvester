@@ -4,7 +4,7 @@ Versions follow the git tags. `extension/manifest.json` carries the same number 
 
 ## v0.2.0-alpha (2026-10-20)
 
-Security and setup hardening. Tested on Windows 11 with Chrome: install, MP3 and MP4 downloads.
+Security and setup hardening. Tested on Windows 11 with Chrome: fresh install and downloads.
 
 ### Security
 - The helper only answers this extension: exact origin, a token from the native host on every request, and no wildcard CORS (#1).
