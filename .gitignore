@@ -1,0 +1,17 @@
+downloads/
+config.json
+helper.log
+com.yt_tab_downloader.helper.json
+__pycache__/
+.venv/
+venv/
+*.pyc
+*.log
+*.mp3
+*.mp4
+*.m4a
+*.webm
+*.part
+*.ytdl
+cookies*.txt
+.env

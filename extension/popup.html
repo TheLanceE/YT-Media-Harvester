@@ -1,0 +1,53 @@
+<!doctype html>
+<meta charset="utf-8">
+<style>
+  :root { --bg: #fff; --fg: #111; --muted: #666; --card: #f6f6f7; --line: #e3e3e6; --red: #e62117; --ok: #1a7f37; --err: #c62828; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #1f1f22; --fg: #eee; --muted: #9a9aa0; --card: #2a2a2e; --line: #3a3a3f; --ok: #3fb950; --err: #ff6b6b; }
+  }
+  body { width: 400px; font: 13px system-ui, sans-serif; margin: 0; background: var(--bg); color: var(--fg); }
+  header { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  header img { width: 20px; height: 20px; }
+  header h1 { font-size: 14px; margin: 0; flex: 1; }
+  .helper { font-size: 11px; color: var(--muted); display: flex; align-items: center; gap: 5px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .dot.on { background: var(--ok); } .dot.off { background: var(--err); }
+  main { padding: 10px 12px; max-height: 420px; overflow-y: auto; }
+  #msg { color: var(--err); margin-bottom: 8px; }
+  #msg:empty { display: none; }
+  .tab { display: flex; gap: 10px; background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 8px; margin-bottom: 8px; }
+  .tab.active { border-color: var(--red); }
+  .thumb { width: 112px; height: 63px; border-radius: 4px; object-fit: cover; background: var(--line); flex-shrink: 0; cursor: pointer; }
+  .info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+  .title { font-weight: 600; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; cursor: pointer; }
+  .title:hover { text-decoration: underline; }
+  .badge { font-size: 10px; font-weight: 600; color: var(--red); text-transform: uppercase; letter-spacing: .04em; }
+  .btns { display: flex; gap: 6px; }
+  button { border: 1px solid var(--line); background: var(--bg); color: var(--fg); border-radius: 6px; padding: 4px 12px; font: inherit; font-weight: 600; cursor: pointer; }
+  button:hover:not(:disabled) { border-color: var(--red); color: var(--red); }
+  button:disabled { opacity: .45; cursor: default; }
+  .bar { height: 4px; background: var(--line); border-radius: 2px; overflow: hidden; display: none; }
+  .bar > div { height: 100%; width: 0; background: var(--red); transition: width .3s; }
+  .tab.busy .bar { display: block; }
+  .bar.indeterminate > div { width: 30%; animation: slide 1s infinite linear; }
+  @keyframes slide { from { margin-left: -30%; } to { margin-left: 100%; } }
+  .st { font-size: 11px; color: var(--muted); }
+  .st.done { color: var(--ok); } .st.error { color: var(--err); }
+  footer { padding: 8px 12px 10px; border-top: 1px solid var(--line); display: flex; align-items: center; gap: 8px; }
+  #outdir { flex: 1; font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+</style>
+<header>
+  <img src="icons/icon32.png" alt="">
+  <h1>YT Tab Downloader</h1>
+  <span class="helper"><span class="dot" id="dot"></span><span id="helper">Checking helper…</span></span>
+</header>
+<main>
+  <div id="msg"></div>
+  <div id="list"></div>
+</main>
+<footer>
+  <span id="outdir"></span>
+  <button id="open">Open folder</button>
+  <button id="settings" title="Change download folder">Settings</button>
+</footer>
+<script src="popup.js"></script>

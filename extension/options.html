@@ -1,0 +1,43 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>YT Tab Downloader settings</title>
+<style>
+  :root { --bg: #fff; --fg: #111; --muted: #666; --card: #f6f6f7; --line: #e3e3e6; --red: #e62117; --ok: #1a7f37; --err: #c62828; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #1f1f22; --fg: #eee; --muted: #9a9aa0; --card: #2a2a2e; --line: #3a3a3f; --ok: #3fb950; --err: #ff6b6b; }
+  }
+  body { font: 14px system-ui, sans-serif; max-width: 600px; margin: 32px auto; padding: 0 16px; background: var(--bg); color: var(--fg); }
+  header { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
+  header img { width: 32px; height: 32px; }
+  h1 { font-size: 18px; margin: 0; }
+  section { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 14px; }
+  label { font-weight: 600; display: block; margin-bottom: 8px; }
+  .row { display: flex; gap: 6px; }
+  input { flex: 1; min-width: 0; padding: 6px 8px; font: inherit; background: var(--bg); color: var(--fg); border: 1px solid var(--line); border-radius: 6px; }
+  input:focus { outline: none; border-color: var(--red); }
+  button { border: 1px solid var(--line); background: var(--bg); color: var(--fg); border-radius: 6px; padding: 6px 12px; font: inherit; font-weight: 600; cursor: pointer; }
+  button:hover:not(:disabled) { border-color: var(--red); color: var(--red); }
+  button:disabled { opacity: .45; cursor: default; }
+  .actions { margin-top: 10px; }
+  .hint { color: var(--muted); font-size: 12px; margin-top: 10px; word-break: break-all; }
+  #msg { margin-top: 12px; }
+  .ok { color: var(--ok); } .err { color: var(--err); }
+</style>
+<header>
+  <img src="icons/icon48.png" alt="">
+  <h1>YT Tab Downloader settings</h1>
+</header>
+<section>
+  <label for="dir">Download folder</label>
+  <div class="row">
+    <input id="dir" spellcheck="false" placeholder="e.g. D:\Music">
+    <button id="browse">Browse…</button>
+  </div>
+  <div class="row actions">
+    <button id="save">Save</button>
+    <button id="reset">Use default</button>
+  </div>
+  <div class="hint">Default: <span id="def">…</span><br>The folder is created if it doesn't exist. Downloads already in progress keep their folder.</div>
+</section>
+<div id="msg"></div>
+<script src="options.js"></script>
