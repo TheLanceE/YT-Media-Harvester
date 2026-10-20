@@ -1,7 +1,8 @@
 {
   "manifest_version": 3,
   "name": "YT Tab Downloader",
-  "version": "1.4",
+  "version": "0.2.0",
+  "version_name": "0.2.0 alpha",
   "description": "Grab the title of an open YouTube tab and download it as MP3 or MP4 via a local helper.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA0ROvIG+Rxp5vxYNImSQb1I5hjsQcl3uFa9cCWAnIQQrLWyOrpdEdWJC00Zj9D/VCBOWySO1zWrBMuuNzPNtGGRmPCZg8U0+tLNzB20hUAVdkyFzvPH5X0cAyGMkNVaYEJ5ibhGTijsTrhRhDTdnKpnZoWZy5MZ5Z68N945r3STKvyipjMCcJok5h4DmwtGfc1t0AwIRBBILgWLXwtCOseb1LDyUGIb0cYmyu+C5rEaVR5lieBCb6ipAkChAL71jM7OErhMpITmvHS0RkRS2oyT52Ax53ZaxVZVMrEl0Voc3w8lkveFIFLrIDSyrwcyCifkUFbO9n/PgNbkOwUL0qOQIDAQAB",
   "permissions": [
