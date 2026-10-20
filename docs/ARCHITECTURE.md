@@ -1,83 +1,84 @@
 # Architecture
 
-YT Media Harvester has two halves: a Manifest V3 Chrome extension that provides the UI, and a local Python helper that does the downloading with yt-dlp and ffmpeg. They talk over HTTP on `127.0.0.1:8765`. A Chrome native messaging host bridges the gap when the helper isn't running yet.
+YT Media Harvester has two halves: a Manifest V3 Chrome extension that provides the UI, and a local Python helper that does the downloading with yt-dlp and ffmpeg. They talk over Chrome native messaging: Chrome starts the helper as a child process and exchanges JSON messages with it over stdin/stdout. There is no network port. See [ADR-0001](adr/0001-extension-to-helper-transport.md) for why.
 
 ```
-┌──────────────── Chrome ────────────────┐
-│  popup.html / popup.js                 │
-│  options.html / options.js             │
-└──────┬───────────────────────┬─────────┘
-       │ 1. sendNativeMessage  │ 2. HTTP (fetch)
-       │    {cmd: "start"}     │    127.0.0.1:8765
-       ▼                       ▼
-┌──────────────────┐   ┌──────────────────────────┐
-│ native_host.py   │──▶│ server.py                │
-│ (via .bat, stdio)│   │ ThreadingHTTPServer      │
-│ starts server if │   │ yt-dlp + ffmpeg + node   │
-│ port is closed   │   │ writes to out_dir        │
-└──────────────────┘   └──────────────────────────┘
+┌──────────────────────── Chrome ─────────────────────────┐
+│  popup.js / options.js                                  │
+│     │ chrome.runtime.sendMessage({cmd, args})           │
+│     ▼                       ▲ chrome.storage.session    │
+│  background.js (service worker)  ── jobs, badge,        │
+│     │ connectNative port          notifications         │
+└─────┼───────────────────────────────────────────────────┘
+      │ length-prefixed JSON over stdin/stdout
+      ▼
+┌──────────────────────────────┐
+│ native_host.py (via .bat)    │  requests in, replies + job events out
+│   core.py: jobs, yt-dlp,     │  yt-dlp/ffmpeg output -> helper.log
+│   ffmpeg, node, out_dir      │
+└──────────────────────────────┘
 ```
 
 ## Components
 
 | File | Role |
 | --- | --- |
-| `extension/manifest.json` | MV3 manifest. Permissions: `tabs`, `nativeMessaging`, and host access to `http://127.0.0.1:8765/*`. The `key` field pins the extension ID so the native host can allow it. |
-| `extension/popup.js` | Lists open YouTube watch tabs, starts downloads, polls job status, shows the helper state and save folder. |
+| `extension/manifest.json` | MV3 manifest. Permissions: `tabs`, `nativeMessaging`, `storage`, `notifications`. The `key` field pins the extension ID so the native host can allow it. |
+| `extension/background.js` | Service worker. Owns the native port, forwards commands from the popup and options page, mirrors job events into `chrome.storage.session`, sets the badge, shows a notification when a download finishes, and lets the helper go a minute after the last job. |
+| `extension/helper.js` | `helper(cmd, args)`: what the popup and options page call to reach `background.js`. |
+| `extension/popup.js` | Lists open YouTube watch tabs, starts downloads, and draws each card from the stored jobs, so progress survives closing and reopening the popup. |
 | `extension/options.js` | Settings page for the download folder. |
-| `core.py` | The download engine: folder config, URL checks, jobs in background threads, the yt-dlp pipeline and retry ladder. Transport-free, so the HTTP server and the planned native-messaging host share it. |
-| `server.py` | The helper's HTTP transport: auth, CORS and Host checks, the HTTP API, idle shutdown. Calls into `core.py`. |
-| `native_host.py` | Native messaging host. Also installs and uninstalls its own registration. |
-| `*.bat` | Wrappers that run the Python files with `.venv\Scripts\python.exe` in the repo, falling back to `..\.venv`. `install.bat` creates the venv if neither exists and installs `requirements.txt`. |
+| `native_host.py` | The helper process Chrome runs. Reads requests, runs them in threads, streams job events. Also installs and uninstalls its own registration. |
+| `core.py` | The download engine: folder config, URL checks, jobs in background threads, the yt-dlp pipeline and retry ladder, partial-file cleanup. |
+| `*.bat` | Wrappers that run the Python files with `.venv\Scripts\python.exe` in the repo, falling back to `..\.venv`. `install.bat` creates the venv if neither exists, installs `requirements.txt`, and registers the host. |
 
-## Starting the helper
+## Starting and stopping the helper
 
-1. Every HTTP call goes through `extension/helper.js`. If it has no token in `chrome.storage.session`, gets a `401`, or can't reach the server, it calls `chrome.runtime.sendNativeMessage("com.yt_tab_downloader.helper", {cmd: "start"})`.
-2. Chrome looks up the host in `HKCU\Software\Google\Chrome\NativeMessagingHosts\com.yt_tab_downloader.helper`, which points to `com.yt_tab_downloader.helper.json`. That manifest names `native_host.bat` and only allows this extension's origin.
-3. `native_host.py` checks whether port 8765 is open. If not, it launches `server.py --idle-minutes 30` hidden (`CREATE_NO_WINDOW`) and detached from Chrome's job object so it outlives the host, with output going to `helper.log`. It waits up to 15 seconds for the port to open, then replies `{ok: true, token}`. The token is created in `config.json` on first use.
-4. The extension stores the token and retries its HTTP call once.
-
-The server exits on its own once 30 minutes pass with no requests and no running job.
+1. `install.bat` writes `com.yt_tab_downloader.helper.json` (it names `native_host.bat` and allows only this extension's origin) and points `HKCU\Software\Google\Chrome\NativeMessagingHosts\com.yt_tab_downloader.helper` at it.
+2. The first command from the popup or options page makes `background.js` call `chrome.runtime.connectNative`. Chrome starts `native_host.bat` and keeps it running while the port is open. An open native port also keeps the service worker alive.
+3. `native_host.py` keeps the real stdout for messages only: before anything else runs it moves file descriptors 1 and 2 to `helper.log`, so yt-dlp, ffmpeg and `print()` can't corrupt the stream.
+4. A minute after the last job finishes, `background.js` disconnects. The host sees stdin close and exits. If Chrome quits mid-download, the host deletes that job's partial files (`.part`, unmerged streams, the cover image, a half-converted output) before exiting.
 
 ## Download flow
 
-1. The popup `POST`s `/download` with `{url, format}`. The server checks that it's a YouTube watch or `youtu.be` URL and that the format is `mp3` or `mp4`, creates a job, and starts a thread. It replies `202 {job}`.
-2. The popup polls `GET /status/<job>` every 700 ms and updates the card's progress bar.
-3. The job runs yt-dlp with:
+1. The popup sends `{cmd: "download", args: {url, format}}`. `background.js` forwards it to the host.
+2. The host checks that it's a YouTube video URL and that the format is `mp3` or `mp4`, creates a job, starts a thread, and replies `{job}`.
+3. Every 0.5 s the host sends a `job` event for any job whose state changed. `background.js` stores it under `jobs` in `chrome.storage.session` and updates the badge; the popup redraws from storage.
+4. The job runs yt-dlp with:
    - **MP3**: `bestaudio`, extracted to MP3 at 192 kbps.
    - **MP4**: best MP4 video + M4A audio, merged to MP4, with chapters.
    - Both: thumbnail downloaded and converted to JPG, metadata written with `FFmpegMetadata`, cover embedded with `EmbedThumbnail`. Files are named `%(title)s [%(id)s].%(ext)s`, so two videos with the same title don't overwrite each other.
    - Node is passed to yt-dlp as its JavaScript runtime when found on `PATH`.
-4. On a 403 or "page needs to be reloaded" error, the job retries in order: plain retry, `tv`/`web_safari` player clients, `android_vr`/`mweb` clients, then cookies (the `cookies_file` from `config.json` if set, otherwise Chrome's cookie store). Any other error stops immediately. The first error message is reported; if reading Chrome's cookies failed, a hint about Chrome 127+ cookie encryption and `cookies_file` is added.
+5. On a 403 or "page needs to be reloaded" error, the job retries in order: plain retry, `tv`/`web_safari` player clients, `android_vr`/`mweb` clients, then cookies (the `cookies_file` from `config.json` if set, otherwise Chrome's cookie store). Any other error stops immediately. The first error message is reported; if reading Chrome's cookies failed, a hint about Chrome 127+ cookie encryption and `cookies_file` is added.
 
-Jobs live in memory only. Restarting the helper forgets them.
+Jobs live in the host's memory and in `chrome.storage.session`. Finished jobs stay listed for an hour; closing Chrome clears them.
 
-## HTTP API
+## Message protocol
 
-All responses are JSON. Base URL `http://127.0.0.1:8765`. Every request needs an `X-Helper-Token` header and is otherwise rejected with `401`.
+Each message is UTF-8 JSON preceded by its length as a 32-bit integer in native byte order (Chrome's native messaging format).
 
-| Method | Path | Body | Response |
-| --- | --- | --- | --- |
-| GET | `/` | | `{ok, out_dir, default_out_dir}` |
-| GET | `/open` | | Opens the download folder in Explorer, then same as `/`. |
-| POST | `/download` | `{url, format: "mp3" \| "mp4"}` | `202 {job}`, or `400 {error}` |
-| GET | `/status/<job>` | | `{status: "running" \| "done" \| "error", progress, out_dir, title?, error?}`. `progress` is a percentage string or `"converting"`; `part` is 2 while an MP4's audio stream downloads. Finished jobs are dropped after 10 minutes. |
-| POST | `/config` | `{out_dir}` (empty resets) | `{ok, out_dir}`, or `400 {error}` |
-| POST | `/choose-folder` | `{}` | Shows the Windows folder picker (tkinter). `{ok, out_dir}` or `{ok: false, cancelled: true}` |
+| Request `{id, cmd, ...}` | Reply `{id, ok: true, ...}` |
+| --- | --- |
+| `hello` | `{version, out_dir, default_out_dir}` |
+| `config` with optional `out_dir` (empty resets) | `{out_dir, default_out_dir}` |
+| `choose_folder` | Shows the folder picker (tkinter). `{out_dir}` or `{cancelled: true, out_dir}` |
+| `open` | Opens the download folder in the file manager. `{}` |
+| `download` with `url`, `format` | `{job}` |
+| `jobs` | `{jobs: {id: job}}` |
+
+A failed request gets `{id, ok: false, error}`. Job events are `{event: "job", job, status, progress, part?, url, format, out_dir, started, title?, error?}`, where `status` is `running`, `done` or `error` and `progress` is a percentage string or `"converting"`.
 
 ## Security notes
 
-- The server binds to `127.0.0.1` only, so nothing outside the machine can reach it.
-- Every route requires the `X-Helper-Token` header, and a request whose `Origin` is set to anything other than this extension's `chrome-extension://` origin is rejected. A web page can't send a custom header without a CORS preflight, and preflights are refused for every origin except the extension's, so pages can't start downloads, open the folder, or read the folder path.
-- Requests must arrive with `Host: 127.0.0.1:8765` (or `localhost:8765`), which blocks DNS-rebinding pages. Download URLs are parsed and must be a video on `youtube.com`, `www.`/`m.`/`music.youtube.com` or `youtu.be`. Malformed or oversized (over 64 KB) bodies get a `400`.
-- The token lives in `config.json` and reaches the extension only through the native messaging host. Any local program that can read your files can still read it; the helper only defends against web pages.
+- Nothing listens on the network. Only Chrome can start the host, and the host manifest allows only the pinned extension ID.
+- Web pages can't talk to the host or to `background.js`: the worker only accepts messages from the extension's own pages.
+- Download URLs are parsed and must be a video on `youtube.com`, `www.`/`m.`/`music.youtube.com` or `youtu.be`.
 - Job IDs are random (`uuid4`).
-- The native messaging host only accepts the pinned extension ID.
 
 ## Local files
 
-These are created at runtime and are ignored by git: `config.json` (download folder and token), `helper.log` (helper output, started over when it passes 1 MB), `com.yt_tab_downloader.helper.json` (native host manifest, written by `install.bat`), and `downloads/` (default output folder).
+These are created at runtime and are ignored by git: `config.json` (download folder, optional `cookies_file`), `helper.log` (helper output, started over when it passes 1 MB), `com.yt_tab_downloader.helper.json` (native host manifest, written by `install.bat`), `.venv/`, and `downloads/` (default output folder).
 
 ## Platform limits
 
-The helper is Windows-only today: registration uses the Windows registry (`winreg`), and the `.bat` wrappers are Windows batch files. Only Chrome's registry key is written, so other Chromium browsers (Edge, Brave) need their own registration.
+The helper is Windows-only today: registration uses the Windows registry (`winreg`), and the `.bat` wrappers are Windows batch files. Only Chrome's registry key is written, so other Chromium browsers (Edge, Brave) need their own registration. Firefox would need a second host manifest using `allowed_extensions` (ADR-0001 follow-up).
