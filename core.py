@@ -1,9 +1,10 @@
 """Download engine shared by the helper's transports: config, URL checks, jobs and the yt-dlp pipeline.
 
-No transport code lives here; server.py (HTTP today) and the native-messaging host (v0.3) both drive it.
+No transport code lives here: native_host.py drives it over Chrome native messaging.
 """
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -14,8 +15,6 @@ from urllib.parse import urlsplit
 
 from yt_dlp import YoutubeDL
 
-import auth
-
 # deno.exe crashes on this machine (0xc0000142) and yt-dlp probes it via PATH; hide it from this process.
 os.environ["PATH"] = os.pathsep.join(
     d for d in os.environ.get("PATH", "").split(os.pathsep) if not os.path.exists(os.path.join(d, "deno.exe"))
@@ -23,7 +22,7 @@ os.environ["PATH"] = os.pathsep.join(
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_OUT_DIR = os.path.join(BASE, "downloads")
-CONFIG = auth.CONFIG  # {"out_dir": "D:\\Music"}; written by the extension's Settings page
+CONFIG = os.path.join(BASE, "config.json")  # {"out_dir": "D:\\Music"}; written by the extension's Settings page
 YOUTUBE_HOSTS = {"youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com"}
 JOB_TTL = 600  # seconds a finished job's status stays available
 picker_lock = threading.Lock()
@@ -74,6 +73,7 @@ def choose_folder() -> str:
 
 
 jobs: dict[str, dict] = {}
+partials: dict[str, set[str]] = {}  # files a job has written so far, deleted if it is cut off mid-download
 
 
 def is_youtube_video(url: str) -> bool:
@@ -110,6 +110,7 @@ def prune_jobs(now: float | None = None):
 def ydl_opts(fmt: str, job_id: str, dest: str) -> dict:
     def hook(d):
         job = jobs[job_id]
+        partials.setdefault(job_id, set()).update(p for p in (d.get("tmpfilename"), d.get("filename")) if p)
         if d["status"] == "downloading":
             job["progress"] = percent(d)
         elif d["status"] == "finished":
@@ -177,6 +178,7 @@ def run_job(job_id: str, url: str, fmt: str, dest: str):
             with YoutubeDL({**ydl_opts(fmt, job_id, dest), **extra}) as ydl:
                 info = ydl.extract_info(url, download=True)
             jobs[job_id].update(status="done", title=info.get("title"), progress="100%", finished_at=time.monotonic())
+            partials.pop(job_id, None)
             return
         except Exception as e:  # noqa: BLE001
             first_err = first_err or str(e)
@@ -186,6 +188,7 @@ def run_job(job_id: str, url: str, fmt: str, dest: str):
             if "403" not in str(e) and "reloaded" not in str(e):
                 break
     jobs[job_id].update(status="error", error=first_err, finished_at=time.monotonic())
+    partials.pop(job_id, None)
 
 
 def start_job(url: str, fmt: str) -> str:
@@ -201,9 +204,25 @@ def start_job(url: str, fmt: str) -> str:
     except OSError as e:
         raise ValueError(f"download folder unavailable: {dest}. Change it in Settings.") from e
     job_id = uuid.uuid4().hex
-    jobs[job_id] = {"status": "running", "progress": "0%", "out_dir": dest}
+    jobs[job_id] = {"status": "running", "progress": "0%", "out_dir": dest, "url": url, "format": fmt, "started": time.time()}
     threading.Thread(target=run_job, args=(job_id, url, fmt, dest), daemon=True).start()
     return job_id
+
+
+def remove_partials(job_id: str):
+    """Delete what an unfinished job left behind (.part files, unmerged streams, a half-converted output)."""
+    fmt = jobs.get(job_id, {}).get("format", "")
+    for path in partials.pop(job_id, set()):
+        # "Title [id].f137.mp4" is one stream of "Title [id].mp4"; ffmpeg writes "<out>.temp.<ext>" while converting.
+        stem = re.sub(r"\.f\d+$", "", os.path.splitext(path)[0])
+        outputs = [f"{stem}.{ext}" for ext in ("jpg", "webp", "png")]  # the cover art, until it is embedded
+        if fmt:
+            outputs += [f"{stem}.{fmt}", f"{stem}.temp.{fmt}"]
+        for p in (path, path + ".part", path + ".ytdl", *outputs):
+            try:
+                os.remove(p)
+            except OSError:
+                pass
 
 
 def busy() -> bool:

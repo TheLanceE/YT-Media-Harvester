@@ -29,7 +29,7 @@ if errorlevel 1 (
 "%PY%" "%~dp0native_host.py" install
 if errorlevel 1 goto :fail
 echo.
-echo Done. Reload the extension in chrome://extensions. You no longer need start.bat.
+echo Done. Reload the extension in chrome://extensions.
 pause
 exit /b 0
 

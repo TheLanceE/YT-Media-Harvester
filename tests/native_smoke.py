@@ -1,29 +1,22 @@
-"""End-to-end check on Windows: after install.bat, Chrome's launcher starts the helper and hands back a token.
+"""End-to-end check on Windows: after install.bat, the registered native host answers the way Chrome expects.
 
-Speaks the native-messaging framing to native_host.bat the way Chrome does. Run from the repo root.
+Talks to native_host.bat with Chrome's framing. Run from the repo root.
 """
 import json
 import os
 import struct
 import subprocess
-import sys
-import urllib.request
 
 BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-msg = json.dumps({"cmd": "start"}).encode()
-out = subprocess.run(
-    ["cmd", "/c", os.path.join(BASE, "native_host.bat")],
-    input=struct.pack("<I", len(msg)) + msg, capture_output=True, timeout=120, check=True,
-).stdout
-length = struct.unpack("<I", out[:4])[0]
-reply = json.loads(out[4:4 + length])
-print("native host replied:", {k: v for k, v in reply.items() if k != "token"})
-assert reply.get("ok") and reply.get("token"), reply
-
-req = urllib.request.Request("http://127.0.0.1:8765/", headers={"X-Helper-Token": reply["token"]})
-with urllib.request.urlopen(req, timeout=10) as r:
-    body = json.load(r)
-print("helper status:", r.status)
-assert body["ok"], body
-sys.exit(0)
+msg = json.dumps({"id": 1, "cmd": "hello"}).encode()
+p = subprocess.Popen(["cmd", "/c", os.path.join(BASE, "native_host.bat"), "chrome-extension://smoke-test/"],
+                     stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+p.stdin.write(struct.pack("=I", len(msg)) + msg)
+p.stdin.flush()
+length = struct.unpack("=I", p.stdout.read(4))[0]
+reply = json.loads(p.stdout.read(length))
+p.stdin.close()
+print("native host replied:", reply)
+assert reply.get("id") == 1 and reply.get("ok") and reply.get("version"), reply
+assert p.wait(timeout=60) == 0, "host did not exit when stdin closed"

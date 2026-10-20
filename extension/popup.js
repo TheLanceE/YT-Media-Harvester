@@ -1,6 +1,5 @@
 const list = document.getElementById("list");
 const msg = document.getElementById("msg");
-const OFFLINE = "Helper couldn't start. Run install.bat once, then reload the extension.";
 
 function cleanTitle(t) { return t.replace(/^\(\d+\)\s*/, "").replace(/\s*-\s*YouTube$/, ""); }
 
@@ -9,21 +8,19 @@ function videoId(url) {
   return u.hostname === "youtu.be" ? u.pathname.slice(1) : u.searchParams.get("v");
 }
 
-async function ping() {
-  try { return await (await helperFetch("/")).json(); } catch { return null; }
-}
-
 // Helper status dot in the header, plus the save folder in the footer.
 async function checkHelper() {
   const dot = document.getElementById("dot"), label = document.getElementById("helper");
-  const j = await ping();
-  if (!j) {
+  try {
+    const j = await helper("hello");
+    dot.className = "dot on"; label.textContent = "Helper online";
+    const o = document.getElementById("outdir"); o.textContent = `Saving to ${j.out_dir}`; o.title = j.out_dir;
+    return true;
+  } catch (e) {
     dot.className = "dot off"; label.textContent = "Helper offline";
+    msg.textContent = e.message;
     return false;
   }
-  dot.className = "dot on"; label.textContent = "Helper online";
-  if (j.out_dir) { const o = document.getElementById("outdir"); o.textContent = `Saving to ${j.out_dir}`; o.title = j.out_dir; }
-  return true;
 }
 
 function setState(card, state, text, pct) {
@@ -36,31 +33,36 @@ function setState(card, state, text, pct) {
   bar.firstElementChild.style.width = pct == null ? "" : pct + "%";
 }
 
+// Shows a job's state on its card. Jobs live in chrome.storage.session, kept up to date by background.js,
+// so a download started earlier still shows its progress when the popup is opened again.
+function showJob(card, job) {
+  const fmt = String(job.format || "").toUpperCase();
+  if (job.status === "done") return setState(card, "done", `✔ Saved ${fmt} to ${job.out_dir}`);
+  if (job.status === "error") return setState(card, "error", "Error: " + job.error);
+  if (job.progress === "converting") return setState(card, "running", "Converting and tagging…", null);
+  const pct = parseFloat(job.progress);
+  const what = job.format === "mp4" ? (job.part > 1 ? " audio" : " video") : "";
+  setState(card, "running", `Downloading${what} ${job.progress || ""}`, isNaN(pct) ? null : pct);
+}
+
+const cards = new Map(); // video id -> card
+function render(jobs = {}) {
+  const latest = new Map();
+  for (const j of Object.values(jobs)) {
+    const id = j.url && videoId(j.url);
+    if (id && cards.has(id) && (latest.get(id)?.started || 0) <= (j.started || 0)) latest.set(id, j);
+  }
+  for (const [id, j] of latest) showJob(cards.get(id), j);
+}
+chrome.storage.session.onChanged.addListener(c => { if (c.jobs) render(c.jobs.newValue); });
+
 async function start(url, format, card) {
   setState(card, "running", `Starting ${format.toUpperCase()}…`, null);
-  if (!(await checkHelper())) return setState(card, "error", OFFLINE);
   try {
-    const r = await helperFetch("/download", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url, format }),
-    });
-    const j = await r.json();
-    if (!r.ok) return setState(card, "error", j.error);
-    const timer = setInterval(async () => {
-      let s;
-      try { s = await (await helperFetch(`/status/${j.job}`)).json(); }
-      catch { clearInterval(timer); return setState(card, "error", OFFLINE); }
-      if (s.status === "done") { clearInterval(timer); return setState(card, "done", `✔ Saved ${format.toUpperCase()} to ${s.out_dir}`); }
-      if (s.status === "error") { clearInterval(timer); return setState(card, "error", "Error: " + s.error); }
-      const pct = parseFloat(s.progress);
-      if (s.progress === "converting") setState(card, "running", "Converting and tagging…", null);
-      else {
-        const what = format === "mp4" ? (s.part > 1 ? " audio" : " video") : "";
-        setState(card, "running", `Downloading${what} ${s.progress || ""}`, isNaN(pct) ? null : pct);
-      }
-    }, 700);
-  } catch {
-    setState(card, "error", OFFLINE);
+    await helper("download", { url, format });
+    msg.textContent = "";
+  } catch (e) {
+    setState(card, "error", e.message);
     checkHelper();
   }
 }
@@ -93,13 +95,12 @@ async function start(url, format, card) {
     const focus = () => { chrome.tabs.update(t.id, { active: true }); chrome.windows.update(t.windowId, { focused: true }); };
     thumb.onclick = title.onclick = focus;
     card.querySelectorAll("button").forEach(b => b.onclick = () => start(t.url, b.dataset.f, card));
+    if (id) cards.set(id, card);
     list.appendChild(card);
   }
+  render((await chrome.storage.session.get("jobs")).jobs);
 })();
 
-document.getElementById("open").onclick = async () => {
-  if (await checkHelper()) helperFetch("/open").catch(() => { msg.textContent = OFFLINE; });
-  else msg.textContent = OFFLINE;
-};
+document.getElementById("open").onclick = () => helper("open").catch(e => { msg.textContent = e.message; });
 
 document.getElementById("settings").onclick = () => chrome.runtime.openOptionsPage();

@@ -43,8 +43,9 @@ Get the code: download the latest `YT-Media-Harvester-vX.Y.Z.zip` from [Releases
 
 1. Open one or more YouTube videos.
 2. Click the extension icon. Each open video appears as a card.
-3. Click **MP3** or **MP4** on a card. The first click after a reboot takes a few seconds while the helper starts.
-4. When the card says **Saved**, click **Open folder** in the popup to see the file.
+3. Click **MP3** or **MP4** on a card. The first click takes a few seconds while the helper starts.
+4. You can close the popup: the download keeps going, the extension icon shows how many are running, and a notification says when each one is saved. Reopen the popup to see progress.
+5. When the card says **Saved**, click **Open folder** in the popup to see the file.
 
 Clicking a card's thumbnail or title switches to that tab.
 
@@ -52,7 +53,7 @@ Clicking a card's thumbnail or title switches to that tab.
 
 Click **Settings** in the popup (or right-click the extension icon and choose **Options**). Type a path or click **Browse…**, then **Save**. **Use default** goes back to the `downloads/` folder inside the repo. The change applies to the next download; downloads already running keep their folder.
 
-The choice is stored in `config.json` next to `server.py`:
+The choice is stored in `config.json` next to `core.py`:
 
 ```json
 { "out_dir": "D:\\Music" }
@@ -66,8 +67,7 @@ An empty value means the default folder.
 | --- | --- |
 | `install.bat` | Registers the native messaging host with Chrome (per user, no admin needed). |
 | `uninstall.bat` | Removes that registration. |
-| `start.bat` | Runs the helper by hand in a visible console window, without idle shutdown. Useful for debugging. The extension still needs `install.bat` to get the helper's token. |
-| `native_host.bat` | Launcher Chrome calls; you don't run it yourself. |
+| `native_host.bat` | The helper itself. Chrome starts it when the extension needs it and stops it about a minute after the last download; you don't run it yourself. |
 
 ## Troubleshooting
 
@@ -76,7 +76,7 @@ An empty value means the default folder.
 - **"Chrome 127+ on Windows locks them" in an error**: Chrome now encrypts its cookies so other programs can't read them while it runs. Export a `cookies.txt` for youtube.com with a cookies.txt browser extension, then add its path to `config.json`, for example `"cookies_file": "D:\\cookies\\youtube.txt"`. The helper then uses that file for its last retry instead of Chrome's cookies.
 - **No cover art or tags**: ffmpeg is missing from `PATH`.
 - **Browse… does nothing**: the folder picker can open behind Chrome. Check the taskbar, or type the path instead.
-- **Port 8765 in use**: another program is using the helper's port. Close it, or change `PORT` in both `server.py` and `native_host.py` and `API` in the extension's JS files, plus `host_permissions` in `manifest.json`.
+- **Downloads stop when Chrome closes**: the helper runs inside Chrome's native messaging connection, so quitting Chrome stops running downloads and deletes their partial files. Start them again after reopening Chrome.
 
 ## Making a release
 

@@ -4,6 +4,12 @@ Versions follow the git tags. `extension/manifest.json` carries the same number 
 
 ## Unreleased
 
+First beta. The extension now talks to the helper over Chrome native messaging instead of a local web server (ADR-0001).
+
+- Downloads keep running when the popup is closed. Reopening it shows their progress; the icon badge counts running downloads and a notification says when each is saved.
+- No local port or token any more: the HTTP server (`server.py`, `auth.py`, `start.bat`) is gone, and only Chrome can start the helper.
+- Quitting Chrome mid-download deletes that download's partial files.
+- yt-dlp and ffmpeg output can never reach the extension's message stream; it goes to `helper.log`.
 - The download engine moved from `server.py` into `core.py`, ready for the native-messaging transport (#11). "Open folder" also works on macOS and Linux.
 - Release workflow: Actions → Release builds the zip, SHA256SUMS and notes from this file and publishes the GitHub Release.
 
