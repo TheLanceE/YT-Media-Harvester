@@ -1,0 +1,5 @@
+target-version = "py310"
+line-length = 130
+
+[lint]
+select = ["E", "F", "W", "B"]

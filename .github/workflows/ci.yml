@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Lint Python
+        run: |
+          pip install ruff
+          ruff check .
+
+      - name: Compile Python
+        run: python -m py_compile server.py native_host.py
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Check extension
+        run: |
+          for f in extension/*.js; do node --check "$f"; done
+          node -e 'const m = require("./extension/manifest.json"); if (m.manifest_version !== 3) throw new Error("manifest_version must be 3")'
