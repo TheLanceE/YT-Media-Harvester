@@ -10,8 +10,9 @@ import subprocess
 BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 msg = json.dumps({"id": 1, "cmd": "hello"}).encode()
-p = subprocess.Popen(["cmd", "/c", os.path.join(BASE, "native_host.bat"), "chrome-extension://smoke-test/"],
-                     stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+# Start the host the way Chrome does, so a folder path with spaces or "&" works here too.
+bat = os.path.join(BASE, "native_host.bat")
+p = subprocess.Popen(f'cmd /d /s /c ""{bat}" chrome-extension://smoke-test/"', stdin=subprocess.PIPE, stdout=subprocess.PIPE)
 p.stdin.write(struct.pack("=I", len(msg)) + msg)
 p.stdin.flush()
 length = struct.unpack("=I", p.stdout.read(4))[0]
