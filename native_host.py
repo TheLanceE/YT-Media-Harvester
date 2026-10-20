@@ -11,7 +11,8 @@ Requests  {id, cmd, ...}  ->  replies {id, ok: true, ...} or {id, ok: false, err
   config        [out_dir]       read, or set (empty resets to the default)
   choose_folder                 OS folder picker; {out_dir} or {cancelled: true}
   open                          show the download folder
-  download      url, format     {job}
+  download      url, format,    {job}; the optional cookies are the browser's youtube.com cookies
+                [cookies]
   jobs                          {jobs: {id: job}}
 Events    {event: "job", job: id, ...job fields}   sent whenever a job's state changes
 """
@@ -26,7 +27,11 @@ NAME = "com.yt_tab_downloader.helper"
 EXTENSION_ID = "kcnffalmlnicdbnolfbgonjbjaekcleg"  # pinned by "key" in extension/manifest.json
 BASE = os.path.dirname(os.path.abspath(__file__))
 MANIFEST = os.path.join(BASE, f"{NAME}.json")
-REG_KEY = rf"Software\Google\Chrome\NativeMessagingHosts\{NAME}"
+# Chrome, Edge and Brave each look the host up under their own key.
+REG_KEYS = [
+    rf"Software\{browser}\NativeMessagingHosts\{NAME}"
+    for browser in (r"Google\Chrome", r"Microsoft\Edge", r"BraveSoftware\Brave-Browser")
+]
 LOG = os.path.join(BASE, "helper.log")
 LOG_MAX_BYTES = 1024 * 1024  # helper.log starts over once it grows past this
 MAX_MESSAGE = 1024 * 1024  # Chrome's own limit for messages to the extension
@@ -89,7 +94,7 @@ def handle(msg: dict) -> dict:
         core.open_folder()
         return {}
     if cmd == "download":
-        return {"job": core.start_job(msg.get("url", ""), msg.get("format", "mp3"))}
+        return {"job": core.start_job(msg.get("url", ""), msg.get("format", "mp3"), msg.get("cookies"))}
     if cmd == "jobs":
         core.prune_jobs()
         return {"jobs": core.jobs}
@@ -159,17 +164,19 @@ def install():
             "allowed_origins": [f"chrome-extension://{EXTENSION_ID}/"],
         }, f, indent=2)
     import winreg
-    with winreg.CreateKey(winreg.HKEY_CURRENT_USER, REG_KEY) as k:
-        winreg.SetValue(k, "", winreg.REG_SZ, MANIFEST)
-    print(f"Registered {NAME} -> {MANIFEST}")
+    for key in REG_KEYS:
+        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, key) as k:
+            winreg.SetValue(k, "", winreg.REG_SZ, MANIFEST)
+    print(f"Registered {NAME} for Chrome, Edge and Brave -> {MANIFEST}")
 
 
 def uninstall():
     import winreg
-    try:
-        winreg.DeleteKey(winreg.HKEY_CURRENT_USER, REG_KEY)
-    except FileNotFoundError:
-        pass
+    for key in REG_KEYS:
+        try:
+            winreg.DeleteKey(winreg.HKEY_CURRENT_USER, key)
+        except FileNotFoundError:
+            pass
     if os.path.exists(MANIFEST):
         os.remove(MANIFEST)
     print(f"Removed {NAME}")

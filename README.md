@@ -14,7 +14,8 @@ The extension is a small UI. The actual downloading is done by a local Python he
 - Live progress bar per tab: downloading, converting and tagging, done.
 - Helper starts by itself through Chrome native messaging and stops after 30 idle minutes.
 - Choose the download folder from a settings page (type a path or pick one with **Browse…**).
-- Automatic retries with other YouTube player clients, then with your Chrome cookies, when YouTube returns 403.
+- Automatic retries with other YouTube player clients, then with your browser's YouTube cookies, when YouTube returns 403 or asks you to sign in.
+- Works in Chrome, Edge and Brave.
 
 ## Requirements
 
@@ -72,8 +73,8 @@ An empty value means the default folder.
 ## Troubleshooting
 
 - **"Helper couldn't start"**: run `install.bat`, reload the extension, and check that `install.bat` finished without errors. Details are in `helper.log`.
-- **403 / "Sign in to confirm you're not a bot" errors**: the helper already retries with other clients and your Chrome cookies. The bot check usually follows many downloads in a row and clears after an hour or so; a `cookies_file` (below) gets past it sooner. Updating yt-dlp usually fixes persistent failures: run `install.bat` again or `.venv\Scripts\pip install -U yt-dlp`.
-- **"Chrome 127+ on Windows locks them" in an error**: Chrome now encrypts its cookies so other programs can't read them while it runs. Export a `cookies.txt` for youtube.com with a cookies.txt browser extension, then add its path to `config.json`, for example `"cookies_file": "D:\\cookies\\youtube.txt"`. The helper then uses that file for its last retry instead of Chrome's cookies.
+- **403 / "Sign in to confirm you're not a bot" errors**: the helper already retries with other clients and then with your browser's YouTube cookies, so being signed in to YouTube in the browser usually gets past it. Otherwise the bot check clears after an hour or so. Updating yt-dlp usually fixes persistent failures: run `install.bat` again or `.venv\Scripts\pip install -U yt-dlp`.
+- **Using your own cookies.txt**: to override the browser's cookies, export a `cookies.txt` for youtube.com and add its path to `config.json`, for example `"cookies_file": "D:\\cookies\\youtube.txt"`. The helper then uses that file for its last retry.
 - **No cover art or tags**: ffmpeg is missing from `PATH`.
 - **Browse… does nothing**: the folder picker can open behind Chrome. Check the taskbar, or type the path instead.
 - **Downloads stop when Chrome closes**: the helper runs inside Chrome's native messaging connection, so quitting Chrome stops running downloads and deletes their partial files. Start them again after reopening Chrome.

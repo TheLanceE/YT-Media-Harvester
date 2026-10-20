@@ -23,7 +23,7 @@ YT Media Harvester has two halves: a Manifest V3 Chrome extension that provides 
 
 | File | Role |
 | --- | --- |
-| `extension/manifest.json` | MV3 manifest. Permissions: `tabs`, `nativeMessaging`, `storage`, `notifications`. The `key` field pins the extension ID so the native host can allow it. |
+| `extension/manifest.json` | MV3 manifest. Permissions: `tabs`, `nativeMessaging`, `storage`, `notifications`, `cookies`, plus host access to `*.youtube.com` (needed to read its cookies). The `key` field pins the extension ID so the native host can allow it. |
 | `extension/background.js` | Service worker. Owns the native port, forwards commands from the popup and options page, mirrors job events into `chrome.storage.session`, sets the badge, shows a notification when a download finishes, and lets the helper go a minute after the last job. |
 | `extension/helper.js` | `helper(cmd, args)`: what the popup and options page call to reach `background.js`. |
 | `extension/popup.js` | Lists open YouTube watch tabs, starts downloads, and draws each card from the stored jobs, so progress survives closing and reopening the popup. |
@@ -49,7 +49,7 @@ YT Media Harvester has two halves: a Manifest V3 Chrome extension that provides 
    - **MP4**: best MP4 video + M4A audio, merged to MP4, with chapters.
    - Both: thumbnail downloaded and converted to JPG, metadata written with `FFmpegMetadata`, cover embedded with `EmbedThumbnail`. Files are named `%(title)s [%(id)s].%(ext)s`, so two videos with the same title don't overwrite each other.
    - Node is passed to yt-dlp as its JavaScript runtime when found on `PATH`.
-5. On a 403 or "page needs to be reloaded" error, the job retries in order: plain retry, `tv`/`web_safari` player clients, `android_vr`/`mweb` clients, then cookies (the `cookies_file` from `config.json` if set, otherwise Chrome's cookie store). Any other error stops immediately. The first error message is reported; if reading Chrome's cookies failed, a hint about Chrome 127+ cookie encryption and `cookies_file` is added.
+5. On a 403 or "page needs to be reloaded" error, the job retries in order: plain retry, `tv`/`web_safari` player clients, `android_vr`/`mweb` clients, then cookies. YouTube's "Sign in to confirm you're not a bot" check skips straight to the cookie rung, since other clients get the same answer. Cookies come from, in order: the `cookies_file` in `config.json`; the browser's youtube.com cookies, which the service worker reads with `chrome.cookies` and sends with each `download` request (the helper writes them to a private temp cookies.txt and deletes it when the job ends); Chrome's cookie store. Any other error stops immediately. The first error message is reported, with a hint for the bot check or an unreadable Chrome cookie store.
 
 Jobs live in the host's memory and in `chrome.storage.session`. Finished jobs stay listed for an hour; closing Chrome clears them.
 
@@ -74,6 +74,7 @@ A failed request gets `{id, ok: false, error}`. Job events are `{event: "job", j
 - Web pages can't talk to the host or to `background.js`: the worker only accepts messages from the extension's own pages.
 - Download URLs are parsed and must be a video on `youtube.com`, `www.`/`m.`/`music.youtube.com` or `youtu.be`.
 - Job IDs are random (`uuid4`).
+- YouTube cookies only travel from the browser to the local helper over native messaging. The helper keeps only youtube.com cookies, writes them to a temp file readable by the current user only, and deletes it when the job ends. If Chrome quits mid-download, that file can be left in the temp folder.
 
 ## Local files
 
@@ -81,4 +82,4 @@ These are created at runtime and are ignored by git: `config.json` (download fol
 
 ## Platform limits
 
-The helper is Windows-only today: registration uses the Windows registry (`winreg`), and the `.bat` wrappers are Windows batch files. Only Chrome's registry key is written, so other Chromium browsers (Edge, Brave) need their own registration. Firefox would need a second host manifest using `allowed_extensions` (ADR-0001 follow-up).
+The helper is Windows-only today: registration uses the Windows registry (`winreg`), and the `.bat` wrappers are Windows batch files. `install.bat` writes the host key for Chrome, Edge and Brave. Firefox would need a second host manifest using `allowed_extensions` (ADR-0001 follow-up).

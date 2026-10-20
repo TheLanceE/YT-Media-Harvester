@@ -8,7 +8,9 @@ First beta. The extension now talks to the helper over Chrome native messaging i
 
 - Downloads keep running when the popup is closed. Reopening it shows their progress; the icon badge counts running downloads and a notification says when each is saved.
 - No local port or token any more: the HTTP server (`server.py`, `auth.py`, `start.bat`) is gone, and only Chrome can start the helper.
-- YouTube's "Sign in to confirm you're not a bot" check now goes straight to the signed-in cookie retry instead of failing at once, and the error says how to get past it.
+- YouTube's "Sign in to confirm you're not a bot" check now goes straight to the cookie retry instead of failing at once, and the error says how to get past it.
+- The cookie retry uses the browser's own youtube.com cookies, which the extension reads and passes to the helper (new `cookies` permission, youtube.com only). No more cookies.txt export, and it works around Chrome 127+ cookie encryption and Edge's locked cookie file. A `cookies_file` in config.json still takes precedence.
+- install.bat registers the helper for Edge and Brave as well as Chrome.
 - Quitting Chrome mid-download deletes that download's partial files.
 - yt-dlp and ffmpeg output can never reach the extension's message stream; it goes to `helper.log`.
 - The download engine moved from `server.py` into `core.py`, ready for the native-messaging transport (#11). "Open folder" also works on macOS and Linux.

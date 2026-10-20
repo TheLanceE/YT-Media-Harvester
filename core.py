@@ -8,6 +8,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import uuid
@@ -157,8 +158,8 @@ COOKIE_HINT = (
 
 BOT_HINT = (
     "YouTube is asking this connection to prove it isn't a bot, usually after many downloads in a row. "
-    'Waiting an hour or so clears it; to keep going now, export a cookies.txt for youtube.com while signed in '
-    'and set "cookies_file" to its path in config.json.'
+    "Sign in to YouTube in this browser and try again: the helper retries with your browser's YouTube cookies. "
+    "Otherwise waiting an hour or so clears it."
 )
 
 
@@ -166,22 +167,59 @@ def is_bot_check(err: str) -> bool:
     return "not a bot" in err or "Sign in to confirm" in err
 
 
-def cookie_attempt() -> dict:
-    """The last retry rung: a cookies.txt from config.json if one is set, else Chrome's own cookie store."""
+def write_cookie_file(cookies: list) -> str:
+    """Write the browser's youtube.com cookies (from the extension) to a private Netscape cookies.txt; returns its path."""
+    lines = ["# Netscape HTTP Cookie File"]
+    for c in cookies:
+        fields = [str(c.get(k, "")) for k in ("domain", "path", "name", "value")]
+        if not all(isinstance(c.get(k), str) for k in ("domain", "name", "value")) or any(
+            ch in f for f in fields for ch in "\t\r\n"
+        ):
+            continue
+        domain, path, name, value = fields
+        if not (domain.lstrip(".") == "youtube.com" or domain.endswith(".youtube.com")):
+            continue
+        sub = "TRUE" if domain.startswith(".") else "FALSE"
+        secure = "TRUE" if c.get("secure") else "FALSE"
+        expires = str(int(c.get("expires") or 0)) if isinstance(c.get("expires"), (int, float)) else "0"
+        lines.append("\t".join([domain, sub, path or "/", secure, expires, name, value]))
+    fd, path = tempfile.mkstemp(prefix="ytdl-cookies-", suffix=".txt")  # readable by this user only
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines) + "\n")
+    return path
+
+
+def cookie_attempt(cookie_path: str = "") -> dict:
+    """The last retry rung: a cookies.txt from config.json if one is set, else the cookies the extension
+    sent from the browser, else Chrome's own cookie store (unreadable on Chrome 127+ for Windows)."""
     path = load_config().get("cookies_file") or ""
     if path and os.path.isfile(path):
         return {"cookiefile": path}
+    if cookie_path:
+        return {"cookiefile": cookie_path}
     return {"cookiesfrombrowser": ("chrome",)}
 
 
-def run_job(job_id: str, url: str, fmt: str, dest: str):
+def run_job(job_id: str, url: str, fmt: str, dest: str, cookies: list | None = None):
+    cookie_path = write_cookie_file(cookies) if cookies else ""
+    try:
+        attempt_download(job_id, url, fmt, dest, cookie_path)
+    finally:
+        if cookie_path:
+            try:
+                os.remove(cookie_path)
+            except OSError:
+                pass
+
+
+def attempt_download(job_id: str, url: str, fmt: str, dest: str, cookie_path: str):
     # On 403, retry with other YouTube player clients, then with cookies.
     attempts = [
         {},
         {},  # plain retry: "page needs to be reloaded" is usually transient
         {"extractor_args": {"youtube": {"player_client": ["tv", "web_safari"]}}},
         {"extractor_args": {"youtube": {"player_client": ["android_vr", "mweb"]}}},
-        cookie_attempt(),
+        cookie_attempt(cookie_path),
     ]
     first_err = ""
     while attempts:
@@ -194,7 +232,8 @@ def run_job(job_id: str, url: str, fmt: str, dest: str):
             return
         except Exception as e:  # noqa: BLE001
             first_err = first_err or str(e)
-            if "cookiesfrombrowser" in extra and any(w in str(e).lower() for w in ("cookie", "dpapi", "decrypt")):
+            unreadable = any(w in str(e).lower() for w in ("cookie", "dpapi", "decrypt")) and not is_bot_check(str(e))
+            if "cookiesfrombrowser" in extra and unreadable:
                 # Reading Chrome's cookies failed, which says nothing about the video; explain instead of hiding it.
                 first_err = f"{first_err} {COOKIE_HINT}"
             if is_bot_check(str(e)) and attempts:
@@ -209,12 +248,14 @@ def run_job(job_id: str, url: str, fmt: str, dest: str):
     partials.pop(job_id, None)
 
 
-def start_job(url: str, fmt: str) -> str:
+def start_job(url: str, fmt: str, cookies: list | None = None) -> str:
     """Validate a download request and start it in a thread. Returns the job id; raises ValueError for bad input."""
     if not isinstance(url, str) or not is_youtube_video(url):
         raise ValueError("not a YouTube video URL")
     if fmt not in ("mp3", "mp4"):
         raise ValueError("format must be mp3 or mp4")
+    if cookies is not None and not (isinstance(cookies, list) and all(isinstance(c, dict) for c in cookies)):
+        raise ValueError("cookies must be a list of objects")
     prune_jobs()
     dest = out_dir()
     try:
@@ -223,7 +264,7 @@ def start_job(url: str, fmt: str) -> str:
         raise ValueError(f"download folder unavailable: {dest}. Change it in Settings.") from e
     job_id = uuid.uuid4().hex
     jobs[job_id] = {"status": "running", "progress": "0%", "out_dir": dest, "url": url, "format": fmt, "started": time.time()}
-    threading.Thread(target=run_job, args=(job_id, url, fmt, dest), daemon=True).start()
+    threading.Thread(target=run_job, args=(job_id, url, fmt, dest, cookies), daemon=True).start()
     return job_id
 
 

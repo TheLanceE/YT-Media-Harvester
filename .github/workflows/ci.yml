@@ -56,5 +56,6 @@ jobs:
           call install.bat < nul
           if errorlevel 1 exit /b 1
           reg query "HKCU\Software\Google\Chrome\NativeMessagingHosts\com.yt_tab_downloader.helper" || exit /b 1
+          reg query "HKCU\Software\Microsoft\Edge\NativeMessagingHosts\com.yt_tab_downloader.helper" || exit /b 1
           .venv\Scripts\python.exe tests\native_smoke.py
 
