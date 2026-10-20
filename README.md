@@ -26,24 +26,16 @@ The extension is a small UI. The actual downloading is done by a local Python he
 
 ## Setup
 
-The `.bat` scripts expect a Python virtual environment named `.venv` in the **parent** folder of this repo:
-
-```
-some-folder\
-├── .venv\                 <- create this
-└── YT-Media-Harvester\    <- this repo
-```
-
-1. **Create the venv and install yt-dlp** (from the parent folder):
-
-   ```
-   python -m venv .venv
-   .venv\Scripts\pip install -r YT-Media-Harvester\requirements.txt
-   ```
+1. **Install Python 3.10+** from [python.org](https://www.python.org/downloads/) and tick **Add python.exe to PATH**. Install ffmpeg and Node.js too (see Requirements).
 
 2. **Load the extension:** open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked** and select the `extension/` folder.
 
-3. **Register the helper:** double-click `install.bat` once, then reload the extension in `chrome://extensions`. This registers a native messaging host so the extension can start the helper itself. Run it again if you move the repo folder.
+3. **Run `install.bat`** (double-click it), then reload the extension in `chrome://extensions`. It:
+   - creates a `.venv` folder inside the repo, unless one already exists there or in the parent folder (the older setup);
+   - installs `requirements.txt` into it;
+   - registers the native messaging host, so the extension can start the helper itself.
+
+   If anything fails it says what went wrong and ends with "Install did not finish". Run it again after you update the repo or move its folder.
 
 ## Usage
 
@@ -77,8 +69,8 @@ An empty value means the default folder.
 
 ## Troubleshooting
 
-- **"Helper couldn't start"**: run `install.bat`, reload the extension, and check that `..\.venv` exists with yt-dlp installed. Details are in `helper.log`.
-- **403 / "Sign in to confirm" errors**: the helper already retries with other clients and your Chrome cookies. Updating yt-dlp usually fixes persistent failures: `..\.venv\Scripts\pip install -U yt-dlp`.
+- **"Helper couldn't start"**: run `install.bat`, reload the extension, and check that `install.bat` finished without errors. Details are in `helper.log`.
+- **403 / "Sign in to confirm" errors**: the helper already retries with other clients and your Chrome cookies. Updating yt-dlp usually fixes persistent failures: run `install.bat` again or `.venv\Scripts\pip install -U yt-dlp`.
 - **"Chrome 127+ on Windows locks them" in an error**: Chrome now encrypts its cookies so other programs can't read them while it runs. Export a `cookies.txt` for youtube.com with a cookies.txt browser extension, then add its path to `config.json`, for example `"cookies_file": "D:\\cookies\\youtube.txt"`. The helper then uses that file for its last retry instead of Chrome's cookies.
 - **No cover art or tags**: ffmpeg is missing from `PATH`.
 - **Browse… does nothing**: the folder picker can open behind Chrome. Check the taskbar, or type the path instead.
