@@ -1,23 +1,92 @@
-# YT-Media-Harvester
-Allows users to download MP3s and MP4s from YT alongside thumbnails and provided metadata.
+# YT Media Harvester
+
+A Chrome extension that downloads the YouTube videos you have open as **MP3** or **MP4**, with the thumbnail embedded as cover art and the video's metadata (title, channel, date, description, URL) written into the file.
+
+The extension is a small UI. The actual downloading is done by a local Python helper built on [yt-dlp](https://github.com/yt-dlp/yt-dlp), which the extension starts automatically when you need it.
+
+> **Status:** alpha (v0.1.0). Windows and Google Chrome only for now.
+
+## Features
+
+- Lists every open YouTube video tab in the popup, current tab first, with thumbnail and title.
+- One click to save as MP3 (192 kbps) or MP4 (best MP4 video + M4A audio).
+- Cover art and tags embedded in both formats; chapters added to MP4s.
+- Live progress bar per tab: downloading, converting and tagging, done.
+- Helper starts by itself through Chrome native messaging and stops after 30 idle minutes.
+- Choose the download folder from a settings page (type a path or pick one with **Browse…**).
+- Automatic retries with other YouTube player clients, then with your Chrome cookies, when YouTube returns 403.
+
+## Requirements
+
+- Windows 10 or 11
+- Google Chrome
+- Python 3.10+
+- [ffmpeg](https://ffmpeg.org/) on `PATH` (conversion, tagging, thumbnail embedding)
+- [Node.js](https://nodejs.org/) on `PATH` (yt-dlp uses it to solve YouTube's JavaScript challenge)
+
+## Setup
+
+The `.bat` scripts expect a Python virtual environment named `.venv` in the **parent** folder of this repo:
+
+```
+some-folder\
+├── .venv\                 <- create this
+└── YT-Media-Harvester\    <- this repo
+```
+
+1. **Create the venv and install yt-dlp** (from the parent folder):
+
+   ```
+   python -m venv .venv
+   .venv\Scripts\pip install yt-dlp
+   ```
+
+2. **Load the extension:** open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked** and select the `extension/` folder.
+
+3. **Register the helper:** double-click `install.bat` once, then reload the extension in `chrome://extensions`. This registers a native messaging host so the extension can start the helper itself. Run it again if you move the repo folder.
 
 ## Usage
-Needs the repo `.venv` one folder up with yt-dlp, plus ffmpeg and node on PATH.
 
-1. Chrome -> `chrome://extensions` -> Developer mode -> Load unpacked -> select `extension/`
-2. Double-click `install.bat` once. It registers a small launcher with Chrome, so the extension starts the helper by itself. (If you move this folder, run it again.)
-3. Click the extension icon on any open YouTube tab: pick MP3 or MP4. The first click after a reboot takes a few seconds while the helper starts.
+1. Open one or more YouTube videos.
+2. Click the extension icon. Each open video appears as a card.
+3. Click **MP3** or **MP4** on a card. The first click after a reboot takes a few seconds while the helper starts.
+4. When the card says **Saved**, click **Open folder** in the popup to see the file.
 
-The helper runs hidden in the background and stops itself after 30 minutes with nothing to do. Its output goes to `helper.log`. `uninstall.bat` removes the launcher. `start.bat` still works if you want to run the helper by hand in a window.
+Clicking a card's thumbnail or title switches to that tab.
 
-**Download folder:** click **Settings** in the popup (or right-click the extension icon -> Options). Type a path or click **Browse…** to pick one; it applies to the next download, no restart needed. The choice is saved in `config.json` next to `server.py` (`{"out_dir": "D:\\Music"}`); an empty value means the default `downloads/` folder.
+### Changing the download folder
 
-## Setting up from a fresh clone
-The `.bat` files expect a Python virtual environment named `.venv` in the folder that contains this one. From that parent folder:
+Click **Settings** in the popup (or right-click the extension icon and choose **Options**). Type a path or click **Browse…**, then **Save**. **Use default** goes back to the `downloads/` folder inside the repo. The change applies to the next download; downloads already running keep their folder.
 
+The choice is stored in `config.json` next to `server.py`:
+
+```json
+{ "out_dir": "D:\\Music" }
 ```
-python -m venv .venv
-.venv\Scripts\pip install yt-dlp
-```
 
-ffmpeg and node must also be on PATH.
+An empty value means the default folder.
+
+## Scripts
+
+| Script | What it does |
+| --- | --- |
+| `install.bat` | Registers the native messaging host with Chrome (per user, no admin needed). |
+| `uninstall.bat` | Removes that registration. |
+| `start.bat` | Runs the helper by hand in a visible console window, without idle shutdown. Useful for debugging. |
+| `native_host.bat` | Launcher Chrome calls; you don't run it yourself. |
+
+## Troubleshooting
+
+- **"Helper couldn't start"**: run `install.bat`, reload the extension, and check that `..\.venv` exists with yt-dlp installed. Details are in `helper.log`.
+- **403 / "Sign in to confirm" errors**: the helper already retries with other clients and your Chrome cookies. Updating yt-dlp usually fixes persistent failures: `..\.venv\Scripts\pip install -U yt-dlp`.
+- **No cover art or tags**: ffmpeg is missing from `PATH`.
+- **Browse… does nothing**: the folder picker can open behind Chrome. Check the taskbar, or type the path instead.
+- **Port 8765 in use**: another program is using the helper's port. Close it, or change `PORT` in both `server.py` and `native_host.py` and `API` in the extension's JS files, plus `host_permissions` in `manifest.json`.
+
+## How it works
+
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the components, the request flow and the helper's HTTP API.
+
+## Disclaimer
+
+Only download content you have the right to download. Respect YouTube's Terms of Service and the rights of creators.
