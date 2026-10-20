@@ -2,7 +2,7 @@
 
 **Status:** Proposed
 **Date:** 2026-10-20
-**Deciders:** Iheb (maintainer)
+**Deciders:** Lance (maintainer)
 
 ## Context
 
@@ -34,7 +34,7 @@ Until that lands, **harden the HTTP helper now** (Option A below). Those fixes a
 
 ### Option A: Keep the hybrid, lock down HTTP
 
-Require the exact `chrome-extension://kcnffalmlnicdbnolfbgonjbjaekcleg` origin on every endpoint, including `GET`s, and drop the wildcard CORS header. Add a random token, generated into `config.json` and handed to the extension in the native `start` reply, as a required header. Use `uuid4()` job IDs.
+Require the exact `chrome-extension://kcnffalmlnicdbnolfbgonjbjaekcleg` origin on every endpoint, including `GET`s, and drop the wildcard CORS header. Add a random token, generated into `config.json` and handed to the extension in the native `start` reply, as a required header. (Done; see the Action items.) Use `uuid4()` job IDs.
 
 | Dimension | Assessment |
 |-----------|------------|
@@ -90,7 +90,7 @@ A is still worth doing first. It is a few hours of work, closes the hole today, 
 
 ## Action items
 
-1. [ ] Harden `server.py`: exact extension origin on all routes, no wildcard CORS, token header, `uuid4()` job IDs.
+1. [x] Harden `server.py`: exact extension origin on all routes, no wildcard CORS, token header, `uuid4()` job IDs.
 2. [ ] Split `server.py` into `core.py` (`ydl_opts`, `run_job`, config) and transports.
 3. [ ] Add the host job loop and message protocol. Route all yt-dlp and ffmpeg output away from stdout.
 4. [ ] Add a background service worker that owns `connectNative` and stores jobs in `chrome.storage.session`. Point the popup and options page at it.

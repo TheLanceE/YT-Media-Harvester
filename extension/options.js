@@ -1,16 +1,15 @@
-const API = "http://127.0.0.1:8765";
-const NATIVE_HOST = "com.yt_tab_downloader.helper";
 const dir = document.getElementById("dir");
 const msg = document.getElementById("msg");
 const buttons = [...document.querySelectorAll("button")];
 
 function show(text, ok) { msg.textContent = text; msg.className = ok ? "ok" : "err"; }
 
-// GET when body is undefined, otherwise POST it as JSON. Returns the reply, or undefined after showing the error.
-async function call(path, body, retried) {
+// GET when body is undefined, otherwise POST it as JSON. Starts the helper if needed (see helper.js).
+// Returns the reply, or undefined after showing the error.
+async function call(path, body) {
   buttons.forEach(b => b.disabled = true);
   try {
-    const r = await fetch(API + path, body === undefined ? {} : {
+    const r = await helperFetch(path, body === undefined ? {} : {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
     });
     const j = await r.json();
@@ -19,13 +18,7 @@ async function call(path, body, retried) {
     if (j.default_out_dir) document.getElementById("def").textContent = j.default_out_dir;
     return j;
   } catch (e) {
-    if (e instanceof TypeError && !retried) {
-      // Helper not running: start it through the native host (install.bat), then try once more.
-      show("Starting helper…", true);
-      const r = await chrome.runtime.sendNativeMessage(NATIVE_HOST, { cmd: "start" }).catch(() => null);
-      if (r?.ok) { show("", true); return call(path, body, true); }
-    }
-    show(e instanceof TypeError ? "Helper couldn't start. Run install.bat once (or start start.bat)." : "Error: " + e.message);
+    show(e instanceof TypeError ? "Helper couldn't start. Run install.bat once, then reload the extension." : "Error: " + e.message);
   } finally {
     buttons.forEach(b => b.disabled = false);
   }
