@@ -4,7 +4,7 @@ A Chrome extension that downloads the YouTube videos you have open as **MP3** or
 
 The extension is a small UI. The actual downloading is done by a local Python helper built on [yt-dlp](https://github.com/yt-dlp/yt-dlp), which the extension starts automatically when you need it.
 
-> **Status:** beta (v0.4.0). Windows and Google Chrome only for now.
+> **Status:** v0.4.0. Windows and Google Chrome only for now.
 
 ## Features
 
@@ -93,7 +93,7 @@ On Windows, `pip install -r requirements-build.txt`, then `python scripts\build_
 ## Making a release
 
 1. Bump `version` (and `version_name` for pre-releases) in `extension/manifest.json`, and turn `## Unreleased` in `CHANGELOG.md` into `## vX.Y.Z[-label] (date)`. Merge that PR.
-2. In **Actions → Release → Run workflow**, enter the tag (e.g. `v0.3.0-alpha`). It runs the tests, checks the manifest and changelog match the tag, builds the zip and `SHA256SUMS.txt`, creates the tag and publishes the release. Tags with a `-label` are marked pre-release. A Windows job also builds `YT-Media-Harvester-Setup-<tag>.exe` and attaches it.
+2. In **Actions → Release → Run workflow**, enter the tag (e.g. `v0.4.0`). It runs the tests, checks the manifest and changelog match the tag, builds the zip and `SHA256SUMS.txt`, creates the tag and publishes the release. Tags with a `-label` (e.g. `v0.5.0-beta`) are marked pre-release; a plain `vX.Y.Z` tag becomes the Latest release. A Windows job also builds `YT-Media-Harvester-Setup-<tag>.exe` and attaches it.
 3. To try the installer without publishing anything, run the workflow with **installer_only** ticked (any tag, e.g. `v0.4.0-test`) and download the `installer` artifact from the run.
 
 ## How it works

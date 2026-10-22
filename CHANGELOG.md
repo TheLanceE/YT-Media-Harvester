@@ -2,7 +2,7 @@
 
 Versions follow the git tags. `extension/manifest.json` carries the same number in `version`, with the pre-release label in `version_name`.
 
-## v0.4.0-beta (unreleased)
+## v0.4.0 (unreleased)
 
 The one-click Windows installer (#5).
 
