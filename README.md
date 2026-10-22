@@ -17,15 +17,22 @@ The extension is a small UI. The actual downloading is done by a local Python he
 - Automatic retries with other YouTube player clients, then with your browser's YouTube cookies, when YouTube returns 403 or asks you to sign in.
 - Works in Chrome, Edge and Brave.
 
-## Requirements
+## Quick install (Windows)
+
+1. Download `YT-Media-Harvester-Setup-vX.Y.Z.exe` from [Releases](https://github.com/TheLanceE/YT-Media-Harvester/releases) and run it. Pick the browsers you use (Chrome, Edge, Brave). No admin rights, Python, ffmpeg or Node needed: they're bundled.
+2. When it finishes, it opens the extension folder and a one-minute guide. In your browser's extensions page, turn on **Developer mode**, click **Load unpacked** and choose that folder.
+
+Downloads go to `Downloads\YT Media Harvester` unless you pick another folder in Settings. Uninstall from Windows "Add or remove programs". The rest of this README covers running from source.
+
+## Requirements (from source)
 
 - Windows 10 or 11
-- Google Chrome
+- Google Chrome, Microsoft Edge or Brave
 - Python 3.10+
 - [ffmpeg](https://ffmpeg.org/) on `PATH` (conversion, tagging, thumbnail embedding)
 - [Node.js](https://nodejs.org/) on `PATH` (yt-dlp uses it to solve YouTube's JavaScript challenge)
 
-## Setup
+## Setup (from source)
 
 Get the code: download the latest `YT-Media-Harvester-vX.Y.Z.zip` from [Releases](https://github.com/TheLanceE/YT-Media-Harvester/releases) and unzip it, or clone the repo.
 

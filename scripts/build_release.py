@@ -63,8 +63,11 @@ def build(tag: str, out: str) -> list[str]:
     with open(os.path.join(out, "SHA256SUMS.txt"), "w", encoding="utf-8") as f:
         f.write(f"{digest}  {name}.zip\n")
     with open(os.path.join(out, "notes.md"), "w", encoding="utf-8") as f:
-        f.write(notes + f"\n\n## Install\n\nUnzip `{name}.zip`, load its `extension/` folder in `chrome://extensions` "
-                "(Developer mode, Load unpacked), then run `install.bat` and reload the extension. See README.md.\n")
+        f.write(notes + f"\n\n## Install\n\n**Windows installer:** run `YT-Media-Harvester-Setup-{tag}.exe`, tick your browsers, "
+                "then follow the one-minute guide it opens to add the extension (Developer mode, Load unpacked). "
+                f"No Python needed.\n\n**From source:** unzip `{name}.zip`, load its `extension/` folder in "
+                "`chrome://extensions` (Developer mode, Load unpacked), then run `install.bat` and reload the extension. "
+                "See README.md.\n")
     return [zip_path, os.path.join(out, "SHA256SUMS.txt")]
 
 

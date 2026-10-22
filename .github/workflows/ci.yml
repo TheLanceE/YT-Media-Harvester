@@ -73,3 +73,31 @@ jobs:
           reg query "HKCU\Software\Microsoft\Edge\NativeMessagingHosts\com.yt_tab_downloader.helper" || exit /b 1
           type dist\helper\com.yt_tab_downloader.helper.json
           findstr /c:"native_host.exe" dist\helper\com.yt_tab_downloader.helper.json || exit /b 1
+
+      - name: Installer build, silent install and uninstall
+        shell: cmd
+        run: |
+          set "ISCC=C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          if not exist "%ISCC%" choco install innosetup -y --no-progress
+          "%ISCC%" /Q /DAppVersion=0.0.0-ci /DHelperDir=..\dist\helper installer\yt-media-harvester.iss
+          if errorlevel 1 exit /b 1
+          dist\helper\native_host.exe uninstall
+          set "APP=%LOCALAPPDATA%\Programs\YT Media Harvester"
+          start /wait "" dist\YT-Media-Harvester-Setup-0.0.0-ci.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /TASKS="chrome,edge"
+          if errorlevel 1 exit /b 1
+          reg query "HKCU\Software\Google\Chrome\NativeMessagingHosts\com.yt_tab_downloader.helper" || exit /b 1
+          reg query "HKCU\Software\Microsoft\Edge\NativeMessagingHosts\com.yt_tab_downloader.helper" || exit /b 1
+          reg query "HKCU\Software\BraveSoftware\Brave-Browser\NativeMessagingHosts\com.yt_tab_downloader.helper" && exit /b 1
+          type "%APP%\com.yt_tab_downloader.helper.json"
+          findstr /c:"YT Media Harvester" "%APP%\com.yt_tab_downloader.helper.json" || exit /b 1
+          findstr /c:"native_host.exe" "%APP%\com.yt_tab_downloader.helper.json" || exit /b 1
+          python tests\native_smoke.py "%APP%\native_host.exe"
+          if errorlevel 1 exit /b 1
+          start /wait "" "%APP%\unins000.exe" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
+          rem The uninstaller hands off to a copy of itself in TEMP, so wait for the key to go.
+          for /l %%i in (1,1,30) do (
+            reg query "HKCU\Software\Microsoft\Edge\NativeMessagingHosts\com.yt_tab_downloader.helper" >nul 2>&1 || exit /b 0
+            ping -n 2 127.0.0.1 >nul
+          )
+          echo Uninstall left the Edge registry key behind
+          exit /b 1
