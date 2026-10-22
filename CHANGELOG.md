@@ -2,6 +2,15 @@
 
 Versions follow the git tags. `extension/manifest.json` carries the same number in `version`, with the pre-release label in `version_name`.
 
+## Unreleased
+
+Groundwork for the v0.4 one-click installer (#5).
+
+- `scripts/build_helper.py` builds a standalone `native_host.exe` with PyInstaller, so the installed helper needs no Python. With `--tools` it also fetches checksum-verified `ffmpeg.exe`, `ffprobe.exe` (BtbN GPL build) and `node.exe` into `bin/`.
+- The helper uses `bin/ffmpeg.exe` and `bin/node.exe` when they're present, and falls back to `PATH` otherwise.
+- `native_host install` takes the browsers to register, e.g. `install chrome edge` (no argument means all three). When frozen, the host manifest points at `native_host.exe` instead of `native_host.bat`.
+- Windows CI builds the standalone helper and smoke-tests it.
+
 ## v0.3.0-beta (2026-10-22)
 
 First beta. The extension now talks to the helper over Chrome native messaging instead of a local web server (ADR-0001).

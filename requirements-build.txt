@@ -1,0 +1,3 @@
+-r requirements.txt
+# Builds the standalone helper for the Windows installer (scripts/build_helper.py).
+pyinstaller>=6.10

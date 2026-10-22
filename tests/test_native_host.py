@@ -7,6 +7,8 @@ import sys
 import threading
 import time
 
+import pytest
+
 import native_host
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -80,3 +82,19 @@ def test_framing_end_to_end(tmp_path):
     assert p.stdout.read() == b""  # print() and library output went to helper.log, not to Chrome
     assert replies[7]["ok"] and "out_dir" in replies[7]
     assert not replies[8]["ok"]
+
+
+def test_install_picks_browsers():
+    assert native_host.pick_browsers([]) == ["chrome", "edge", "brave"]
+    assert native_host.pick_browsers(["edge"]) == ["edge"]
+    with pytest.raises(SystemExit):
+        native_host.pick_browsers(["firefox"])
+
+
+def test_bundled_tools_found_in_bin(core, tmp_path, monkeypatch):
+    monkeypatch.setattr(core, "BIN", str(tmp_path))
+    assert core.bundled("ffmpeg") == ""
+    exe = tmp_path / ("ffmpeg.exe" if os.name == "nt" else "ffmpeg")
+    exe.write_bytes(b"")
+    assert core.bundled("ffmpeg") == str(exe)
+    assert core.ydl_opts("mp3", "j", str(tmp_path))["ffmpeg_location"] == str(tmp_path)

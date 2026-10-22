@@ -25,13 +25,12 @@ import time
 
 NAME = "com.yt_tab_downloader.helper"
 EXTENSION_ID = "kcnffalmlnicdbnolfbgonjbjaekcleg"  # pinned by "key" in extension/manifest.json
-BASE = os.path.dirname(os.path.abspath(__file__))
+FROZEN = getattr(sys, "frozen", False)  # the installer's native_host.exe, built by scripts/build_helper.py
+BASE = os.path.dirname(sys.executable if FROZEN else os.path.abspath(__file__))
 MANIFEST = os.path.join(BASE, f"{NAME}.json")
 # Chrome, Edge and Brave each look the host up under their own key.
-REG_KEYS = [
-    rf"Software\{browser}\NativeMessagingHosts\{NAME}"
-    for browser in (r"Google\Chrome", r"Microsoft\Edge", r"BraveSoftware\Brave-Browser")
-]
+BROWSERS = {"chrome": r"Google\Chrome", "edge": r"Microsoft\Edge", "brave": r"BraveSoftware\Brave-Browser"}
+REG_KEYS = {name: rf"Software\{path}\NativeMessagingHosts\{NAME}" for name, path in BROWSERS.items()}
 LOG = os.path.join(BASE, "helper.log")
 LOG_MAX_BYTES = 1024 * 1024  # helper.log starts over once it grows past this
 MAX_MESSAGE = 1024 * 1024  # Chrome's own limit for messages to the extension
@@ -154,25 +153,25 @@ def serve(inp, out):
             core.remove_partials(job_id)
 
 
-def install():
+def install(browsers: list[str]):
     with open(MANIFEST, "w", encoding="utf-8") as f:
         json.dump({
             "name": NAME,
             "description": "YT Media Harvester helper",
-            "path": os.path.join(BASE, "native_host.bat"),
+            "path": sys.executable if FROZEN else os.path.join(BASE, "native_host.bat"),
             "type": "stdio",
             "allowed_origins": [f"chrome-extension://{EXTENSION_ID}/"],
         }, f, indent=2)
     import winreg
-    for key in REG_KEYS:
-        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, key) as k:
+    for browser in browsers:
+        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, REG_KEYS[browser]) as k:
             winreg.SetValue(k, "", winreg.REG_SZ, MANIFEST)
-    print(f"Registered {NAME} for Chrome, Edge and Brave -> {MANIFEST}")
+    print(f"Registered {NAME} for {', '.join(browsers)} -> {MANIFEST}")
 
 
 def uninstall():
     import winreg
-    for key in REG_KEYS:
+    for key in REG_KEYS.values():
         try:
             winreg.DeleteKey(winreg.HKEY_CURRENT_USER, key)
         except FileNotFoundError:
@@ -182,9 +181,17 @@ def uninstall():
     print(f"Removed {NAME}")
 
 
+def pick_browsers(args: list[str]) -> list[str]:
+    """`install` alone registers every browser; `install chrome edge` only those."""
+    unknown = [a for a in args if a not in BROWSERS]
+    if unknown:
+        sys.exit(f"unknown browser {unknown[0]!r}; choose from {', '.join(BROWSERS)}")
+    return args or list(BROWSERS)
+
+
 if __name__ == "__main__":
     if sys.argv[1:2] == ["install"]:
-        install()
+        install(pick_browsers(sys.argv[2:]))
     elif sys.argv[1:2] == ["uninstall"]:
         uninstall()
     else:  # launched by Chrome; argv[1] is the caller's origin

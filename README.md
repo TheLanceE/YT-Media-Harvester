@@ -79,6 +79,10 @@ An empty value means the default folder.
 - **Browse… does nothing**: the folder picker can open behind Chrome. Check the taskbar, or type the path instead.
 - **Downloads stop when Chrome closes**: the helper runs inside Chrome's native messaging connection, so quitting Chrome stops running downloads and deletes their partial files. Start them again after reopening Chrome.
 
+## Building the standalone helper
+
+On Windows, `pip install -r requirements-build.txt`, then `python scripts\build_helper.py dist\helper --tools`. This writes a self-contained `native_host.exe`, the extension, and ffmpeg and Node in `bin/`. Register it with `dist\helper\native_host.exe install` (or `install chrome edge` for specific browsers). The bundled ffmpeg is BtbN's GPL build, whose source is at https://github.com/BtbN/FFmpeg-Builds.
+
 ## Making a release
 
 1. Bump `version` (and `version_name` for pre-releases) in `extension/manifest.json`, and turn `## Unreleased` in `CHANGELOG.md` into `## vX.Y.Z[-label] (date)`. Merge that PR.
