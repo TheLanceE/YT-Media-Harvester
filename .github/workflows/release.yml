@@ -11,6 +11,10 @@ on:
       target:
         description: "Commit SHA to release (default: the branch head)"
         required: false
+      installer_only:
+        description: "Only build the installer as a downloadable workflow artifact, for testing; publish nothing"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -53,6 +57,7 @@ jobs:
 
   release:
     needs: installer
+    if: ${{ !inputs.installer_only }}
     runs-on: ubuntu-latest
     env:
       TAG: ${{ inputs.tag }}

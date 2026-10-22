@@ -93,7 +93,8 @@ On Windows, `pip install -r requirements-build.txt`, then `python scripts\build_
 ## Making a release
 
 1. Bump `version` (and `version_name` for pre-releases) in `extension/manifest.json`, and turn `## Unreleased` in `CHANGELOG.md` into `## vX.Y.Z[-label] (date)`. Merge that PR.
-2. In **Actions → Release → Run workflow**, enter the tag (e.g. `v0.3.0-alpha`). It runs the tests, checks the manifest and changelog match the tag, builds the zip and `SHA256SUMS.txt`, creates the tag and publishes the release. Tags with a `-label` are marked pre-release.
+2. In **Actions → Release → Run workflow**, enter the tag (e.g. `v0.3.0-alpha`). It runs the tests, checks the manifest and changelog match the tag, builds the zip and `SHA256SUMS.txt`, creates the tag and publishes the release. Tags with a `-label` are marked pre-release. A Windows job also builds `YT-Media-Harvester-Setup-<tag>.exe` and attaches it.
+3. To try the installer without publishing anything, run the workflow with **installer_only** ticked (any tag, e.g. `v0.4.0-test`) and download the `installer` artifact from the run.
 
 ## How it works
 
