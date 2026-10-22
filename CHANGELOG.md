@@ -2,7 +2,7 @@
 
 Versions follow the git tags. `extension/manifest.json` carries the same number in `version`, with the pre-release label in `version_name`.
 
-## v0.3.0-beta (2026-10-20)
+## v0.3.0-beta (2026-10-22)
 
 First beta. The extension now talks to the helper over Chrome native messaging instead of a local web server (ADR-0001).
 
