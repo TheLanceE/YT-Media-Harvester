@@ -7,13 +7,14 @@ Chrome itself runs it through native_host.bat when the extension's background wo
 running while the port is open. Messages are JSON, each prefixed with its length (4 bytes, native byte order).
 
 Requests  {id, cmd, ...}  ->  replies {id, ok: true, ...} or {id, ok: false, error}
-  hello                         {version, out_dir, default_out_dir}
+  hello                         {version, out_dir, default_out_dir, ytdlp_version, installed}
   config        [out_dir]       read, or set (empty resets to the default)
   choose_folder                 OS folder picker; {out_dir} or {cancelled: true}
   open                          show the download folder
   download      url, format,    {job}; the optional cookies are the browser's youtube.com cookies
                 [cookies]
   jobs                          {jobs: {id: job}}
+  update_ytdlp                  {ytdlp_version, latest}; installed build only, the new copy loads on next start
 Events    {event: "job", job: id, ...job fields}   sent whenever a job's state changes
 """
 import json
@@ -68,13 +69,20 @@ def version() -> str:
         return ""
 
 
+def ytdlp_version() -> str:
+    from yt_dlp.version import __version__
+
+    return __version__
+
+
 def handle(msg: dict) -> dict:
     """Run one request and return the reply's fields. Raises ValueError for a bad request."""
     import core
 
     cmd = msg.get("cmd")
     if cmd == "hello":
-        return {"version": version(), "out_dir": core.out_dir(), "default_out_dir": core.DEFAULT_OUT_DIR}
+        return {"version": version(), "out_dir": core.out_dir(), "default_out_dir": core.DEFAULT_OUT_DIR,
+                "ytdlp_version": ytdlp_version(), "installed": FROZEN}
     if cmd == "config":
         if "out_dir" in msg:
             if not isinstance(msg["out_dir"], str):
@@ -97,6 +105,15 @@ def handle(msg: dict) -> dict:
     if cmd == "jobs":
         core.prune_jobs()
         return {"jobs": core.jobs}
+    if cmd == "update_ytdlp":
+        if not FROZEN:
+            raise ValueError("run install.bat to update yt-dlp in a source checkout")
+        import updater
+
+        try:
+            return {"ytdlp_version": ytdlp_version(), "latest": updater.update(BASE, ytdlp_version())}
+        except Exception as e:  # noqa: BLE001 - offline, PyPI down, disk full: all worth showing as they are
+            raise ValueError(f"couldn't update yt-dlp: {e}") from e
     raise ValueError(f"unknown command: {cmd!r}")
 
 
@@ -201,6 +218,11 @@ if __name__ == "__main__":
             msvcrt.setmode(sys.stdout.fileno(), os.O_BINARY)
         out = isolate_stdout()
         print(f"--- host started {time.strftime('%Y-%m-%d %H:%M:%S')}")
+        if FROZEN:
+            import updater
+
+            updater.activate(BASE)
+            threading.Thread(target=updater.check_daily, args=(BASE, ytdlp_version()), daemon=True).start()
         serve(sys.stdin.buffer, out)
         sys.stdout.flush()
         os._exit(0)  # don't wait for download threads: Chrome has gone

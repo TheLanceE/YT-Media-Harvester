@@ -2,7 +2,7 @@
 
 Versions follow the git tags. `extension/manifest.json` carries the same number in `version`, with the pre-release label in `version_name`.
 
-## Unreleased
+## v0.4.0-beta (unreleased)
 
 The one-click Windows installer (#5).
 
@@ -12,6 +12,7 @@ The one-click Windows installer (#5).
 - One-click Windows installer (`installer/yt-media-harvester.iss`, Inno Setup). It installs per user with no admin prompt, lets you pick Chrome, Edge and/or Brave, registers the helper, and opens the extension folder plus a short "Load unpacked" guide. The uninstaller removes the registry keys and files.
 - In the installed build, downloads default to `Downloads\YT Media Harvester` instead of a folder inside the program folder.
 - The release workflow builds the installer on Windows, with ffmpeg and Node bundled, and attaches it to the GitHub Release along with its checksum.
+- The installed helper keeps yt-dlp current by itself: once a day it checks PyPI and unpacks a newer, checksum-verified release into `lib/` next to itself, used from the next start. A release that fails to load is removed and skipped. Settings shows the yt-dlp version and has an **Update yt-dlp** button.
 - Windows CI builds the standalone helper and the installer, installs silently, smoke-tests the installed helper, and uninstalls.
 
 ## v0.3.0-beta (2026-10-22)

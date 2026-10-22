@@ -84,6 +84,8 @@ These are created at runtime and are ignored by git: `config.json` (download fol
 
 `scripts/build_helper.py` freezes `native_host.py` and `core.py` with PyInstaller into `native_host.exe`, copies `extension/` next to it and, with `--tools`, adds `bin/ffmpeg.exe`, `bin/ffprobe.exe` and `bin/node.exe`. In that build `BASE` is the folder holding `native_host.exe`, so `config.json`, `helper.log` and `downloads/` live there. The host manifest points straight at the `.exe`. The v0.4 installer (#5) ships this folder.
 
+A frozen build can't pip-upgrade yt-dlp, and old yt-dlp releases stop working as YouTube changes. `updater.py` checks PyPI at most once a day (in a background thread at helper start, or on demand through `update_ytdlp` from Settings), verifies the wheel's sha256 and unpacks `yt_dlp/` into `lib/` next to the helper. At the next start `updater.activate()` puts `lib/` first on `sys.path`, before anything imports yt-dlp, so it wins over the frozen copy. If it fails to import, `lib/` is deleted and that version is recorded in `updater.json` as skipped.
+
 ## Platform limits
 
 The helper is Windows-only today: registration uses the Windows registry (`winreg`), and the `.bat` wrappers are Windows batch files. `install.bat` writes the host key for Chrome, Edge and Brave. Firefox would need a second host manifest using `allowed_extensions` (ADR-0001 follow-up).
