@@ -27,10 +27,26 @@ YT Media Harvester has two halves: a Manifest V3 Chrome extension that provides 
 | `extension/background.js` | Service worker. Owns the native port, forwards commands from the popup and options page, mirrors job events into `chrome.storage.session`, sets the badge, shows a notification when a download finishes, and lets the helper go a minute after the last job. |
 | `extension/helper.js` | `helper(cmd, args)`: what the popup and options page call to reach `background.js`. |
 | `extension/popup.js` | Lists open YouTube watch tabs, starts downloads, and draws each card from the stored jobs, so progress survives closing and reopening the popup. |
-| `extension/options.js` | Settings page for the download folder. |
+| `extension/options.js` | Settings page: the download folder, the yt-dlp version, and (installed build) updating yt-dlp. |
 | `native_host.py` | The helper process Chrome runs. Reads requests, runs them in threads, streams job events. Also installs and uninstalls its own registration. |
 | `core.py` | The download engine: folder config, URL checks, jobs in background threads, the yt-dlp pipeline and retry ladder, partial-file cleanup. |
+| `updater.py` | Installed build only: keeps yt-dlp current by unpacking newer releases into `lib/` (see below). |
 | `*.bat` | Wrappers that run the Python files with `.venv\Scripts\python.exe` in the repo, falling back to `..\.venv`. `install.bat` creates the venv if neither exists, installs `requirements.txt`, and registers the host. |
+| `installer/`, `scripts/build_installer.py` | The Windows setup program (Inno Setup) and the script that builds it. |
+
+## Installed build
+
+Users who don't want Python get `YT-Media-Harvester-Setup-vX.Y.Z.exe` from the release. `scripts/build_installer.py` builds it on Windows:
+
+1. PyInstaller freezes `native_host.py` (with `core.py`, `updater.py`, yt-dlp and its extras) into a one-folder `YTMediaHarvesterHelper.exe`. One-folder rather than one-file, because one-file unpacks itself on every start and the browser starts the helper often.
+2. ffmpeg/ffprobe (BtbN's LGPL build of ffmpeg 8.1) and Deno (pinned release) are downloaded into `build/tools` and checked against the checksums their publishers release alongside them, then staged in `bin/`. Deno is yt-dlp's recommended JavaScript runtime; an installed Node.js still takes precedence.
+3. `installer/setup.iss` packs the stage with the extension folder and `setup-guide.html`.
+
+Setup installs per user into `%LOCALAPPDATA%\Programs\YT Media Harvester` (no admin prompt), runs `YTMediaHarvesterHelper.exe install` to register the host for Chrome, Edge and Brave (the manifest then names the .exe instead of `native_host.bat`), and opens `setup-guide.html`. Browsers only install extensions from their stores silently, and the Chrome Web Store doesn't accept YouTube downloaders, so the guide walks the user through **Load unpacked** on `{app}\extension`; the pinned `key` keeps the extension ID, so the registered host allows it. Uninstalling unregisters the host and deletes the helper's runtime files; downloads are never touched.
+
+In the installed build, `BASE` is the folder holding the .exe, so `config.json`, `helper.log` and the host manifest sit next to it, and the default download folder is the user's `Downloads`.
+
+**Keeping yt-dlp current.** A frozen yt-dlp can't be pip-upgraded, and YouTube breaks old releases regularly. At most once a day (`updater.json` records the last check), the helper fetches PyPI's latest yt-dlp wheel in the background, verifies it against PyPI's sha256, and unpacks just the `yt_dlp` package into `lib/` (via `lib.new`, swapped in by rename). At the next start, before anything imports yt-dlp, `updater.activate()` puts `lib/` first on `sys.path`, so it wins over the frozen copy. If it fails to import, `lib/` is deleted, the version is recorded as skipped, and the bundled copy is used. Settings has an **Update yt-dlp** button that runs the same update on demand. Installing a new version of the app deletes `lib/`, since it ships a newer yt-dlp.
 
 ## Starting and stopping the helper
 
@@ -48,7 +64,7 @@ YT Media Harvester has two halves: a Manifest V3 Chrome extension that provides 
    - **MP3**: `bestaudio`, extracted to MP3 at 192 kbps.
    - **MP4**: best MP4 video + M4A audio, merged to MP4, with chapters.
    - Both: thumbnail downloaded and converted to JPG, metadata written with `FFmpegMetadata`, cover embedded with `EmbedThumbnail`. Files are named `%(title)s [%(id)s].%(ext)s`, so two videos with the same title don't overwrite each other.
-   - Node is passed to yt-dlp as its JavaScript runtime when found on `PATH`.
+   - Node is passed to yt-dlp as its JavaScript runtime when found on `PATH`, otherwise the installed build's Deno. The installed build also points yt-dlp at its own ffmpeg.
 5. On a 403 or "page needs to be reloaded" error, the job retries in order: plain retry, `tv`/`web_safari` player clients, `android_vr`/`mweb` clients, then cookies. YouTube's "Sign in to confirm you're not a bot" check skips straight to the cookie rung, since other clients get the same answer. Cookies come from, in order: the `cookies_file` in `config.json`; the browser's youtube.com cookies, which the service worker reads with `chrome.cookies` and sends with each `download` request (the helper writes them to a private temp cookies.txt and deletes it when the job ends); Chrome's cookie store. Any other error stops immediately. The first error message is reported, with a hint for the bot check or an unreadable Chrome cookie store.
 
 Jobs live in the host's memory and in `chrome.storage.session`. Finished jobs stay listed for an hour; closing Chrome clears them.
@@ -59,12 +75,13 @@ Each message is UTF-8 JSON preceded by its length as a 32-bit integer in native 
 
 | Request `{id, cmd, ...}` | Reply `{id, ok: true, ...}` |
 | --- | --- |
-| `hello` | `{version, out_dir, default_out_dir}` |
+| `hello` | `{version, out_dir, default_out_dir, ytdlp_version, installed}` |
 | `config` with optional `out_dir` (empty resets) | `{out_dir, default_out_dir}` |
 | `choose_folder` | Shows the folder picker (tkinter). `{out_dir}` or `{cancelled: true, out_dir}` |
 | `open` | Opens the download folder in the file manager. `{}` |
 | `download` with `url`, `format` | `{job}` |
 | `jobs` | `{jobs: {id: job}}` |
+| `update_ytdlp` | Installed build only. Unpacks the newest yt-dlp into `lib/` if it's newer; it loads on the next helper start. `{ytdlp_version, latest}` |
 
 A failed request gets `{id, ok: false, error}`. Job events are `{event: "job", job, status, progress, part?, url, format, out_dir, started, title?, error?}`, where `status` is `running`, `done` or `error` and `progress` is a percentage string or `"converting"`.
 
@@ -78,7 +95,7 @@ A failed request gets `{id, ok: false, error}`. Job events are `{event: "job", j
 
 ## Local files
 
-These are created at runtime and are ignored by git: `config.json` (download folder, optional `cookies_file`), `helper.log` (helper output, started over when it passes 1 MB), `com.yt_tab_downloader.helper.json` (native host manifest, written by `install.bat`), `.venv/`, and `downloads/` (default output folder).
+These are created at runtime and are ignored by git: `config.json` (download folder, optional `cookies_file`), `helper.log` (helper output, started over when it passes 1 MB), `com.yt_tab_downloader.helper.json` (native host manifest, written by `install.bat`), `.venv/`, and `downloads/` (default output folder). The installed build also writes `updater.json` and `lib/`. `build/` and `dist/` hold installer and release build output.
 
 ## Platform limits
 

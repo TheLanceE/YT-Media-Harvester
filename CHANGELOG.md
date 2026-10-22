@@ -2,6 +2,16 @@
 
 Versions follow the git tags. `extension/manifest.json` carries the same number in `version`, with the pre-release label in `version_name`.
 
+## v0.4.0-beta (unreleased)
+
+A Windows installer, so using the app no longer means installing Python, ffmpeg and Node.js and running install.bat.
+
+- `YT-Media-Harvester-Setup-vX.Y.Z.exe`: a per-user setup program (no admin prompt) with the helper frozen by PyInstaller, yt-dlp, ffmpeg (LGPL build) and Deno as the JavaScript runtime. It registers the helper for Chrome, Edge and Brave and opens a guide for loading the extension, since browsers only install extensions from outside their store through Load unpacked. Uninstalling removes the registration.
+- The installed helper keeps yt-dlp current by itself: once a day it checks PyPI and unpacks a newer, checksum-verified release next to itself, used from the next start. A release that fails to load is skipped. Settings shows the yt-dlp version and has an **Update yt-dlp** button.
+- The installed build saves to your Downloads folder by default.
+- The release workflow builds the Setup .exe on a Windows runner and publishes it with the zip; CI builds it, installs it silently, checks the helper answers, and uninstalls it.
+- Running from source is unchanged.
+
 ## v0.3.0-beta (2026-10-22)
 
 First beta. The extension now talks to the helper over Chrome native messaging instead of a local web server (ADR-0001).

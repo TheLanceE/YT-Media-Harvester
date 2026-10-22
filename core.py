@@ -21,8 +21,11 @@ os.environ["PATH"] = os.pathsep.join(
     d for d in os.environ.get("PATH", "").split(os.pathsep) if not os.path.exists(os.path.join(d, "deno.exe"))
 )
 
-BASE = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_OUT_DIR = os.path.join(BASE, "downloads")
+FROZEN = getattr(sys, "frozen", False)  # the installed build (PyInstaller) rather than a source checkout
+BASE = os.path.dirname(sys.executable if FROZEN else os.path.abspath(__file__))
+BIN = os.path.join(BASE, "bin")  # ffmpeg and deno, shipped by the installer
+# The installed build saves to the user's Downloads by default rather than into its own program folder.
+DEFAULT_OUT_DIR = os.path.join(os.path.expanduser("~"), "Downloads") if FROZEN else os.path.join(BASE, "downloads")
 CONFIG = os.path.join(BASE, "config.json")  # {"out_dir": "D:\\Music"}; written by the extension's Settings page
 YOUTUBE_HOSTS = {"youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com"}
 JOB_TTL = 600  # seconds a finished job's status stays available
@@ -108,6 +111,12 @@ def prune_jobs(now: float | None = None):
             jobs.pop(job_id, None)
 
 
+def bundled(tool: str) -> str:
+    """Path of a tool the installer put in bin/, or "" when running from source."""
+    path = os.path.join(BIN, f"{tool}.exe")
+    return path if os.path.isfile(path) else ""
+
+
 def ydl_opts(fmt: str, job_id: str, dest: str) -> dict:
     def hook(d):
         job = jobs[job_id]
@@ -127,10 +136,14 @@ def ydl_opts(fmt: str, job_id: str, dest: str) -> dict:
         "progress_hooks": [hook],
         "writethumbnail": True,  # downloaded, embedded as cover art, then deleted
     }
-    # Use Node for YouTube's JS challenge.
-    node = shutil.which("node")
+    # YouTube's JS challenge needs a JavaScript runtime: Node if installed, else the Deno the installer ships.
+    node, deno = shutil.which("node"), bundled("deno")
     if node:
         opts["js_runtimes"] = {"node": {"path": node}}
+    elif deno:
+        opts["js_runtimes"] = {"deno": {"path": deno}}
+    if bundled("ffmpeg"):
+        opts["ffmpeg_location"] = BIN
     # Tags (title, artist = channel, date, description, URL) and the thumbnail as cover art.
     # YouTube thumbnails are often webp, which MP3/MP4 can't embed, so convert to jpg first.
     tagging = [

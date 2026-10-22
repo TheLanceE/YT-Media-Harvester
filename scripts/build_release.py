@@ -4,8 +4,9 @@
 
 RELEASE_ROOT points it at another checkout (the release workflow uses this to package an older commit).
 
-The zip holds what a user needs to run the app (extension/, the helper and the .bat files),
-under one top-level folder. Notes are the tag's section of CHANGELOG.md.
+The zip holds what a user needs to run the app from source (extension/, the helper and the .bat files),
+under one top-level folder. Notes are the tag's section of CHANGELOG.md. SHA256SUMS also covers the Setup .exe
+when build_installer.py has already put it in out_dir (the release workflow builds it first, on Windows).
 """
 import hashlib
 import json
@@ -17,7 +18,8 @@ import zipfile
 
 ROOT = os.path.abspath(os.environ.get("RELEASE_ROOT") or os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 TAG_RE = re.compile(r"^v(\d+\.\d+\.\d+)(?:-([0-9A-Za-z.]+))?$")
-LEAVE_OUT = ("tests/", "scripts/", "docs/", ".github/", ".gitattributes", ".gitignore", "ruff.toml", "requirements-dev.txt")
+LEAVE_OUT = ("tests/", "scripts/", "docs/", ".github/", ".gitattributes", ".gitignore", "ruff.toml", "requirements-dev.txt",
+            "installer/", "requirements-build.txt")
 
 
 def fail(msg: str):
@@ -58,13 +60,16 @@ def build(tag: str, out: str) -> list[str]:
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as z:
         for rel in release_files():
             z.write(os.path.join(ROOT, rel), f"{name}/{rel}")
-    with open(zip_path, "rb") as f:
-        digest = hashlib.sha256(f.read()).hexdigest()
+    setup = f"YT-Media-Harvester-Setup-{tag}.exe"
+    assets = [f"{name}.zip"] + ([setup] if os.path.exists(os.path.join(out, setup)) else [])
     with open(os.path.join(out, "SHA256SUMS.txt"), "w", encoding="utf-8") as f:
-        f.write(f"{digest}  {name}.zip\n")
+        for asset in assets:
+            with open(os.path.join(out, asset), "rb") as a:
+                f.write(f"{hashlib.sha256(a.read()).hexdigest()}  {asset}\n")
     with open(os.path.join(out, "notes.md"), "w", encoding="utf-8") as f:
-        f.write(notes + f"\n\n## Install\n\nUnzip `{name}.zip`, load its `extension/` folder in `chrome://extensions` "
-                "(Developer mode, Load unpacked), then run `install.bat` and reload the extension. See README.md.\n")
+        f.write(notes + f"\n\n## Install\n\nRun `{setup}` and follow the guide it opens to load the extension "
+                f"(Developer mode, Load unpacked). To run from source instead, unzip `{name}.zip`, load its "
+                "`extension/` folder, then run `install.bat` and reload the extension. See README.md.\n")
     return [zip_path, os.path.join(out, "SHA256SUMS.txt")]
 
 

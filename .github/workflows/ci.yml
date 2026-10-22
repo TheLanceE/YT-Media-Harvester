@@ -59,3 +59,46 @@ jobs:
           reg query "HKCU\Software\Microsoft\Edge\NativeMessagingHosts\com.yt_tab_downloader.helper" || exit /b 1
           .venv\Scripts\python.exe tests\native_smoke.py
 
+  installer:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build tools
+        shell: pwsh
+        run: |
+          pip install -r requirements-build.txt
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup --no-progress -y }
+
+      - name: Build the installer
+        run: python scripts/build_installer.py ci-build dist
+
+      - name: Install silently, check the helper, uninstall
+        shell: pwsh
+        run: |
+          $app = "$env:LOCALAPPDATA\Programs\YT Media Harvester"
+          $key = "HKCU:\Software\Microsoft\Edge\NativeMessagingHosts\com.yt_tab_downloader.helper"
+          Start-Process dist\YT-Media-Harvester-Setup-ci-build.exe -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART" -Wait
+          foreach ($browser in "Google\Chrome", "Microsoft\Edge", "BraveSoftware\Brave-Browser") {
+            $manifest = (Get-Item "HKCU:\Software\$browser\NativeMessagingHosts\com.yt_tab_downloader.helper").GetValue("")
+            if ($manifest -ne "$app\com.yt_tab_downloader.helper.json") { throw "$browser registration points at $manifest" }
+          }
+          & "$app\bin\ffmpeg.exe" -hide_banner -version | Select-Object -First 1
+          & "$app\bin\deno.exe" --version
+          python tests\native_smoke.py "$app\YTMediaHarvesterHelper.exe"
+          if ($LASTEXITCODE) { throw "smoke test failed" }
+          Start-Process "$app\unins000.exe" -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES" -Wait
+          # The uninstaller hands off to a copy of itself; give it time to finish.
+          for ($i = 0; $i -lt 60 -and (Test-Path $key); $i++) { Start-Sleep 1 }
+          if (Test-Path $key) { throw "uninstall left the Edge registration behind" }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: YT-Media-Harvester-Setup
+          path: dist/YT-Media-Harvester-Setup-ci-build.exe
+          retention-days: 7
+

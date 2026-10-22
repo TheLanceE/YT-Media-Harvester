@@ -128,6 +128,19 @@ def test_non_403_error_stops_retrying(core, monkeypatch, tmp_path):
     assert len(calls) == 1 and job["error"] == "Video unavailable"
 
 
+def test_bundled_tools_used_when_present(core, monkeypatch, tmp_path):
+    monkeypatch.setattr(core, "BIN", str(tmp_path))
+    monkeypatch.setattr(core.shutil, "which", lambda name: None)  # no Node on PATH
+    assert "ffmpeg_location" not in core.ydl_opts("mp3", "j", str(tmp_path))
+    for tool in ("ffmpeg", "deno"):
+        (tmp_path / f"{tool}.exe").write_text("")
+    opts = core.ydl_opts("mp3", "j", str(tmp_path))
+    assert opts["ffmpeg_location"] == str(tmp_path)
+    assert opts["js_runtimes"] == {"deno": {"path": str(tmp_path / "deno.exe")}}
+    monkeypatch.setattr(core.shutil, "which", lambda name: "C:\\node\\node.exe")
+    assert "node" in core.ydl_opts("mp3", "j", str(tmp_path))["js_runtimes"]  # an installed Node wins
+
+
 def test_start_job_validates_and_records(core):
     with pytest.raises(ValueError, match="YouTube"):
         core.start_job("https://evil.example/?x=youtube.com/watch", "mp3")

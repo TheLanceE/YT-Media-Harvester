@@ -44,8 +44,9 @@ def test_bad_requests_get_error_replies(core):
     native_host.answer(Fake, {"id": 1, "cmd": "download", "url": "https://evil.example/?youtube.com/watch"})
     native_host.answer(Fake, {"id": 2, "cmd": "nope"})
     native_host.answer(Fake, {"id": 3, "cmd": "config", "out_dir": 5})
-    assert [m["id"] for m in sent] == [1, 2, 3] and not any(m["ok"] for m in sent)
-    assert "YouTube" in sent[0]["error"] and "unknown command" in sent[1]["error"]
+    native_host.answer(Fake, {"id": 4, "cmd": "update_ytdlp"})  # a source checkout updates through install.bat
+    assert [m["id"] for m in sent] == [1, 2, 3, 4] and not any(m["ok"] for m in sent)
+    assert "YouTube" in sent[0]["error"] and "unknown command" in sent[1]["error"] and "install.bat" in sent[3]["error"]
 
 
 def test_job_events_follow_changes(core):

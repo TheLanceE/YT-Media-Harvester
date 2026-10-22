@@ -1,0 +1,78 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Add YT Tab Downloader to your browser</title>
+<!-- Installed next to the helper and opened by the setup program. The extension folder is worked out from this
+     page's own location, so the page needs no templating. -->
+<style>
+  :root { --bg: #fff; --fg: #111; --muted: #666; --card: #f6f6f7; --line: #e3e3e6; --red: #e62117; --ok: #1a7f37; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #1f1f22; --fg: #eee; --muted: #9a9aa0; --card: #2a2a2e; --line: #3a3a3f; --ok: #3fb950; }
+  }
+  body { font: 15px/1.5 system-ui, sans-serif; max-width: 680px; margin: 32px auto; padding: 0 16px; background: var(--bg); color: var(--fg); }
+  header { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+  header img { width: 40px; height: 40px; }
+  h1 { font-size: 22px; margin: 0; }
+  p.lead { color: var(--muted); margin-top: 4px; }
+  .tabs { display: flex; gap: 6px; margin: 20px 0 12px; }
+  .tabs button { border: 1px solid var(--line); background: var(--card); color: var(--fg); border-radius: 6px; padding: 6px 14px; font: inherit; font-weight: 600; cursor: pointer; }
+  .tabs button[aria-pressed="true"] { border-color: var(--red); color: var(--red); }
+  ol { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 14px 14px 14px 36px; }
+  li { margin: 8px 0; }
+  code { background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 1px 6px; word-break: break-all; }
+  .path { display: flex; gap: 6px; align-items: center; margin-top: 6px; }
+  .path code { flex: 1; padding: 6px 8px; }
+  .copy { border: 1px solid var(--line); background: var(--bg); color: var(--fg); border-radius: 6px; padding: 6px 12px; font: inherit; font-weight: 600; cursor: pointer; }
+  .copy:hover { border-color: var(--red); color: var(--red); }
+  .note { color: var(--muted); font-size: 13px; }
+  .ok { color: var(--ok); }
+</style>
+<header>
+  <img src="extension/icons/icon48.png" alt="">
+  <h1>One last step: add the extension</h1>
+</header>
+<p class="lead">The helper is installed. Your browser only adds extensions from outside its store when you load them yourself, which takes a minute.</p>
+
+<div class="tabs" role="group" aria-label="Browser">
+  <button data-browser="chrome">Chrome</button>
+  <button data-browser="edge">Edge</button>
+  <button data-browser="brave">Brave</button>
+</div>
+
+<ol>
+  <li>Open a new tab and go to <code id="url">chrome://extensions</code> (copy it into the address bar; browsers don't open this page from links).</li>
+  <li>Turn on <b>Developer mode</b> (<span id="where">top right</span>).</li>
+  <li>Click <b>Load unpacked</b> and choose this folder:
+    <div class="path"><code id="folder"></code><button class="copy" id="copy">Copy</button></div>
+  </li>
+  <li>Pin <b>YT Tab Downloader</b> from the puzzle-piece menu, open a YouTube video and click the icon.</li>
+</ol>
+<p class="note">Keep the folder where it is: the browser loads the extension from it. After updating YT Media Harvester, click <b>Reload</b> on the extension's card. To remove everything, uninstall YT Media Harvester from Windows Settings and remove the extension from the browser.</p>
+
+<script>
+  const browsers = {
+    chrome: { url: "chrome://extensions", where: "top right" },
+    edge: { url: "edge://extensions", where: "left side, under the menu" },
+    brave: { url: "brave://extensions", where: "top right" },
+  };
+  const here = decodeURIComponent(location.pathname).replace(/^\/([A-Za-z]:)/, "$1").replace(/\//g, "\\");
+  document.getElementById("folder").textContent = location.protocol === "file:"
+    ? here.slice(0, here.lastIndexOf("\\")) + "\\extension"
+    : "%LOCALAPPDATA%\\Programs\\YT Media Harvester\\extension";  // the default install folder
+  function pick(name) {
+    document.getElementById("url").textContent = browsers[name].url;
+    document.getElementById("where").textContent = browsers[name].where;
+    for (const b of document.querySelectorAll(".tabs button")) b.setAttribute("aria-pressed", b.dataset.browser === name);
+  }
+  for (const b of document.querySelectorAll(".tabs button")) b.onclick = () => pick(b.dataset.browser);
+  pick(/Edg\//.test(navigator.userAgent) ? "edge" : navigator.brave ? "brave" : "chrome");
+  document.getElementById("copy").onclick = async e => {
+    try {
+      await navigator.clipboard.writeText(document.getElementById("folder").textContent);
+      e.target.textContent = "Copied";
+      e.target.classList.add("ok");
+    } catch {
+      getSelection().selectAllChildren(document.getElementById("folder"));
+    }
+  };
+</script>

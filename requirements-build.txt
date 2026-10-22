@@ -1,0 +1,5 @@
+# Building the Windows installer (scripts/build_installer.py). Inno Setup 6 is installed separately.
+-r requirements.txt
+# yt-dlp's recommended extras go into the frozen helper too; users can't pip-install them later.
+yt-dlp[default]>=2025.11.12
+pyinstaller>=6.10

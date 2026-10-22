@@ -16,7 +16,40 @@ permissions:
   contents: write
 
 jobs:
+  installer:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.target || github.sha }}
+          path: src
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build tools
+        shell: pwsh
+        run: |
+          pip install -r src/requirements-build.txt
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup --no-progress -y }
+
+      - name: Build the installer
+        shell: pwsh
+        env:
+          RELEASE_ROOT: src
+          TAG: ${{ inputs.tag }}
+        run: python scripts/build_installer.py "$env:TAG" dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: setup
+          path: dist/*.exe
+
   release:
+    needs: installer
     runs-on: ubuntu-latest
     env:
       TAG: ${{ inputs.tag }}
@@ -38,6 +71,11 @@ jobs:
           pip install -r src/requirements-dev.txt
           python -m pytest -q src/tests
 
+      - uses: actions/download-artifact@v4
+        with:
+          name: setup
+          path: dist
+
       - name: Build
         run: RELEASE_ROOT=src python scripts/build_release.py "$TAG" dist
 
@@ -47,5 +85,5 @@ jobs:
         run: |
           if gh release view "$TAG" >/dev/null 2>&1; then echo "Release $TAG already exists"; exit 1; fi
           pre=""; case "$TAG" in *-*) pre="--prerelease";; esac
-          gh release create "$TAG" dist/*.zip dist/SHA256SUMS.txt \
+          gh release create "$TAG" dist/*.zip dist/*.exe dist/SHA256SUMS.txt \
             --target "$(git -C src rev-parse HEAD)" --title "$TAG" --notes-file dist/notes.md $pre

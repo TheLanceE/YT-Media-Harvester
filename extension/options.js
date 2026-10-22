@@ -34,3 +34,20 @@ document.getElementById("browse").onclick = async () => {
   if (j) show(j.cancelled ? "" : "Saved. New downloads go to " + j.out_dir, true);
 };
 dir.onkeydown = e => { if (e.key === "Enter") document.getElementById("save").click(); };
+
+// yt-dlp: the installed helper can update itself; a source checkout is updated by install.bat.
+const parts = v => String(v || "").split(".").map(Number);
+const newer = (a, b) => { const [x, y] = [parts(a), parts(b)]; for (let i = 0; i < 3; i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0); return false; };
+helper("hello").then(j => {
+  document.getElementById("ytdlp").textContent = j.ytdlp_version || "unknown";
+  if (j.installed) document.getElementById("update-row").hidden = false;
+  else document.getElementById("update-hint").textContent = "Run install.bat again to update yt-dlp.";
+}).catch(() => {});
+document.getElementById("update").onclick = async () => {
+  show("Checking for a new yt-dlp…", true);
+  const j = await call("update_ytdlp");
+  if (!j) return;
+  show(newer(j.latest, j.ytdlp_version)
+    ? `yt-dlp ${j.latest} is ready. It's used once the helper restarts, about a minute after downloads finish.`
+    : `yt-dlp ${j.ytdlp_version} is the newest version.`, true);
+};

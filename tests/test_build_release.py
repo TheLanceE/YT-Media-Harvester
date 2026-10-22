@@ -35,6 +35,14 @@ def test_builds_zip_for_current_version(tmp_path):
     assert (tmp_path / "SHA256SUMS.txt").read_text().endswith(f"YT-Media-Harvester-{tag}.zip\n")
 
 
+def test_checksums_cover_the_setup_exe(tmp_path):
+    tag = current_tag()
+    (tmp_path / f"YT-Media-Harvester-Setup-{tag}.exe").write_bytes(b"setup")
+    assert run(tag, tmp_path).returncode == 0
+    lines = (tmp_path / "SHA256SUMS.txt").read_text().splitlines()
+    assert [line.split()[1] for line in lines] == [f"YT-Media-Harvester-{tag}.zip", f"YT-Media-Harvester-Setup-{tag}.exe"]
+
+
 def test_rejects_wrong_version_and_bad_tags(tmp_path):
     assert run("v99.0.0", tmp_path).returncode != 0
     assert run("0.2.0", tmp_path).returncode != 0
