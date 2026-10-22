@@ -2,6 +2,19 @@
 
 Versions follow the git tags. `extension/manifest.json` carries the same number in `version`, with the pre-release label in `version_name`.
 
+## v0.4.0 (unreleased)
+
+The one-click Windows installer (#5).
+
+- `scripts/build_helper.py` builds a standalone `native_host.exe` with PyInstaller, so the installed helper needs no Python. With `--tools` it also fetches checksum-verified `ffmpeg.exe`, `ffprobe.exe` (BtbN GPL build) and `node.exe` into `bin/`.
+- The helper uses `bin/ffmpeg.exe` and `bin/node.exe` when they're present, and falls back to `PATH` otherwise.
+- `native_host install` takes the browsers to register, e.g. `install chrome edge` (no argument means all three). When frozen, the host manifest points at `native_host.exe` instead of `native_host.bat`.
+- One-click Windows installer (`installer/yt-media-harvester.iss`, Inno Setup). It installs per user with no admin prompt, lets you pick Chrome, Edge and/or Brave, registers the helper, and opens the extension folder plus a short "Load unpacked" guide. The uninstaller removes the registry keys and files.
+- In the installed build, downloads default to `Downloads\YT Media Harvester` instead of a folder inside the program folder.
+- The release workflow builds the installer on Windows, with ffmpeg and Node bundled, and attaches it to the GitHub Release along with its checksum.
+- The installed helper keeps yt-dlp current by itself: once a day it checks PyPI and unpacks a newer, checksum-verified release into `lib/` next to itself, used from the next start. A release that fails to load is removed and skipped. Settings shows the yt-dlp version and has an **Update yt-dlp** button.
+- Windows CI builds the standalone helper and the installer, installs silently, smoke-tests the installed helper, and uninstalls.
+
 ## v0.3.0-beta (2026-10-22)
 
 First beta. The extension now talks to the helper over Chrome native messaging instead of a local web server (ADR-0001).

@@ -21,12 +21,24 @@ os.environ["PATH"] = os.pathsep.join(
     d for d in os.environ.get("PATH", "").split(os.pathsep) if not os.path.exists(os.path.join(d, "deno.exe"))
 )
 
-BASE = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_OUT_DIR = os.path.join(BASE, "downloads")
+# Next to native_host.exe in the installed build (PyInstaller sets sys.frozen), else next to this file.
+BASE = os.path.dirname(sys.executable if getattr(sys, "frozen", False) else os.path.abspath(__file__))
+BIN = os.path.join(BASE, "bin")  # the installer's ffmpeg.exe and node.exe
+# The installed build saves to the user's Downloads folder, not inside the program folder the uninstaller removes.
+if getattr(sys, "frozen", False):
+    DEFAULT_OUT_DIR = os.path.join(os.path.expanduser("~"), "Downloads", "YT Media Harvester")
+else:
+    DEFAULT_OUT_DIR = os.path.join(BASE, "downloads")
 CONFIG = os.path.join(BASE, "config.json")  # {"out_dir": "D:\\Music"}; written by the extension's Settings page
 YOUTUBE_HOSTS = {"youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com"}
 JOB_TTL = 600  # seconds a finished job's status stays available
 picker_lock = threading.Lock()
+
+
+def bundled(tool: str) -> str:
+    """Path of a tool shipped in bin/ by the installer, or "" when running from source."""
+    path = os.path.join(BIN, tool + (".exe" if os.name == "nt" else ""))
+    return path if os.path.isfile(path) else ""
 
 
 def load_config() -> dict:
@@ -127,10 +139,12 @@ def ydl_opts(fmt: str, job_id: str, dest: str) -> dict:
         "progress_hooks": [hook],
         "writethumbnail": True,  # downloaded, embedded as cover art, then deleted
     }
-    # Use Node for YouTube's JS challenge.
-    node = shutil.which("node")
+    # Use Node for YouTube's JS challenge, and the installer's own ffmpeg when there is one.
+    node = bundled("node") or shutil.which("node")
     if node:
         opts["js_runtimes"] = {"node": {"path": node}}
+    if bundled("ffmpeg"):
+        opts["ffmpeg_location"] = BIN
     # Tags (title, artist = channel, date, description, URL) and the thumbnail as cover art.
     # YouTube thumbnails are often webp, which MP3/MP4 can't embed, so convert to jpg first.
     tagging = [

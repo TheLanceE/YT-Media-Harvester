@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Finish setting up YT Media Harvester</title>
+<style>
+  :root { --bg: #fff; --fg: #1f1f1f; --muted: #5f6368; --accent: #e62117; --card: #f6f6f7; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #1f1f1f; --fg: #eee; --muted: #aaa; --card: #2a2a2b; } }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, "Segoe UI", sans-serif; }
+  main { max-width: 640px; margin: 40px auto; padding: 0 16px; }
+  h1 { font-size: 24px; margin: 0 0 4px; }
+  p.lead { color: var(--muted); margin: 0 0 24px; }
+  ol { padding: 0; list-style: none; counter-reset: step; }
+  li { counter-increment: step; background: var(--card); border-radius: 12px; padding: 16px 16px 16px 60px; margin: 0 0 12px; position: relative; }
+  li::before { content: counter(step); position: absolute; left: 16px; top: 16px; width: 28px; height: 28px; border-radius: 50%;
+               background: var(--accent); color: #fff; font-weight: 600; text-align: center; line-height: 28px; }
+  code { background: var(--bg); border-radius: 6px; padding: 2px 6px; font-size: 14px; }
+  .note { color: var(--muted); font-size: 14px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>One last step: add the extension</h1>
+  <p class="lead">The helper is installed. Browsers only let you add this extension yourself, so here's how. It takes about a minute.</p>
+  <ol>
+    <li>Open your browser's extensions page by typing it into the address bar:
+      <code>chrome://extensions</code>, <code>edge://extensions</code> or <code>brave://extensions</code>.</li>
+    <li>Turn on <b>Developer mode</b>. It's a switch in the top right in Chrome and Brave, and on the left in Edge.</li>
+    <li>Click <b>Load unpacked</b> and choose the <b>extension</b> folder that the installer just opened.
+      It's in the folder where YT Media Harvester was installed.</li>
+  </ol>
+  <p>Then open a YouTube video, click the red YT Tab Downloader icon and pick MP3 or MP4. Files go to
+    <code>Downloads\YT Media Harvester</code>; you can change that under Settings.</p>
+  <p class="note">If the popup says "Helper offline", run the installer again and tick your browser.
+    To remove everything, use "Add or remove programs" in Windows Settings.</p>
+</main>
+</body>
+</html>

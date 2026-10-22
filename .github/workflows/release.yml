@@ -11,12 +11,53 @@ on:
       target:
         description: "Commit SHA to release (default: the branch head)"
         required: false
+      installer_only:
+        description: "Only build the installer as a downloadable workflow artifact, for testing; publish nothing"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
 
 jobs:
+  installer:
+    # The one-click Windows installer: standalone helper, ffmpeg and Node, built from `target`.
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.target || github.sha }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build helper and installer
+        shell: cmd
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          pip install -r requirements-build.txt
+          python scripts\build_helper.py dist\helper --tools
+          if errorlevel 1 exit /b 1
+          python tests\native_smoke.py dist\helper\native_host.exe
+          if errorlevel 1 exit /b 1
+          set "ISCC=C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          if not exist "%ISCC%" choco install innosetup -y --no-progress
+          set "VERSION=%TAG:~1%"
+          "%ISCC%" /Q /DAppVersion=%VERSION% /DHelperDir=..\dist\helper installer\yt-media-harvester.iss
+          if errorlevel 1 exit /b 1
+          ren dist\YT-Media-Harvester-Setup-%VERSION%.exe YT-Media-Harvester-Setup-%TAG%.exe
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installer
+          path: dist/YT-Media-Harvester-Setup-*.exe
+          if-no-files-found: error
+
   release:
+    needs: installer
+    if: ${{ !inputs.installer_only }}
     runs-on: ubuntu-latest
     env:
       TAG: ${{ inputs.tag }}
@@ -41,11 +82,19 @@ jobs:
       - name: Build
         run: RELEASE_ROOT=src python scripts/build_release.py "$TAG" dist
 
+      - uses: actions/download-artifact@v4
+        with:
+          name: installer
+          path: dist
+
+      - name: Checksums for the installer
+        run: (cd dist && sha256sum YT-Media-Harvester-Setup-*.exe >> SHA256SUMS.txt && cat SHA256SUMS.txt)
+
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           if gh release view "$TAG" >/dev/null 2>&1; then echo "Release $TAG already exists"; exit 1; fi
           pre=""; case "$TAG" in *-*) pre="--prerelease";; esac
-          gh release create "$TAG" dist/*.zip dist/SHA256SUMS.txt \
+          gh release create "$TAG" dist/*.zip dist/*.exe dist/SHA256SUMS.txt \
             --target "$(git -C src rev-parse HEAD)" --title "$TAG" --notes-file dist/notes.md $pre

@@ -10,6 +10,8 @@
   header { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
   header img { width: 32px; height: 32px; }
   h1 { font-size: 18px; margin: 0; }
+  section + section { margin-top: 12px; }
+  [hidden] { display: none !important; }
   section { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 14px; }
   label { font-weight: 600; display: block; margin-bottom: 8px; }
   .row { display: flex; gap: 6px; }
@@ -38,6 +40,14 @@
     <button id="reset">Use default</button>
   </div>
   <div class="hint">Default: <span id="def">…</span><br>The folder is created if it doesn't exist. Downloads already in progress keep their folder.</div>
+</section>
+<section>
+  <label>yt-dlp</label>
+  <div class="row"><span>Version <span id="ytdlp">…</span></span></div>
+  <div class="row actions" id="update-row" hidden>
+    <button id="update">Update yt-dlp</button>
+  </div>
+  <div class="hint" id="update-hint">The installed helper checks for a new yt-dlp once a day. YouTube changes often; a new yt-dlp usually fixes downloads that stopped working.</div>
 </section>
 <div id="msg"></div>
 <script src="helper.js"></script>

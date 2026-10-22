@@ -4,7 +4,7 @@ A Chrome extension that downloads the YouTube videos you have open as **MP3** or
 
 The extension is a small UI. The actual downloading is done by a local Python helper built on [yt-dlp](https://github.com/yt-dlp/yt-dlp), which the extension starts automatically when you need it.
 
-> **Status:** beta (v0.3.0). Windows and Google Chrome only for now.
+> **Status:** v0.4.0. Windows and Google Chrome only for now.
 
 ## Features
 
@@ -17,15 +17,22 @@ The extension is a small UI. The actual downloading is done by a local Python he
 - Automatic retries with other YouTube player clients, then with your browser's YouTube cookies, when YouTube returns 403 or asks you to sign in.
 - Works in Chrome, Edge and Brave.
 
-## Requirements
+## Quick install (Windows)
+
+1. Download `YT-Media-Harvester-Setup-vX.Y.Z.exe` from [Releases](https://github.com/TheLanceE/YT-Media-Harvester/releases) and run it. Pick the browsers you use (Chrome, Edge, Brave). No admin rights, Python, ffmpeg or Node needed: they're bundled.
+2. When it finishes, it opens the extension folder and a one-minute guide. In your browser's extensions page, turn on **Developer mode**, click **Load unpacked** and choose that folder.
+
+Downloads go to `Downloads\YT Media Harvester` unless you pick another folder in Settings. Uninstall from Windows "Add or remove programs". The rest of this README covers running from source.
+
+## Requirements (from source)
 
 - Windows 10 or 11
-- Google Chrome
+- Google Chrome, Microsoft Edge or Brave
 - Python 3.10+
 - [ffmpeg](https://ffmpeg.org/) on `PATH` (conversion, tagging, thumbnail embedding)
 - [Node.js](https://nodejs.org/) on `PATH` (yt-dlp uses it to solve YouTube's JavaScript challenge)
 
-## Setup
+## Setup (from source)
 
 Get the code: download the latest `YT-Media-Harvester-vX.Y.Z.zip` from [Releases](https://github.com/TheLanceE/YT-Media-Harvester/releases) and unzip it, or clone the repo.
 
@@ -79,10 +86,15 @@ An empty value means the default folder.
 - **Browse… does nothing**: the folder picker can open behind Chrome. Check the taskbar, or type the path instead.
 - **Downloads stop when Chrome closes**: the helper runs inside Chrome's native messaging connection, so quitting Chrome stops running downloads and deletes their partial files. Start them again after reopening Chrome.
 
+## Building the standalone helper
+
+On Windows, `pip install -r requirements-build.txt`, then `python scripts\build_helper.py dist\helper --tools`. This writes a self-contained `native_host.exe`, the extension, and ffmpeg and Node in `bin/`. Register it with `dist\helper\native_host.exe install` (or `install chrome edge` for specific browsers). The bundled ffmpeg is BtbN's GPL build, whose source is at https://github.com/BtbN/FFmpeg-Builds.
+
 ## Making a release
 
 1. Bump `version` (and `version_name` for pre-releases) in `extension/manifest.json`, and turn `## Unreleased` in `CHANGELOG.md` into `## vX.Y.Z[-label] (date)`. Merge that PR.
-2. In **Actions → Release → Run workflow**, enter the tag (e.g. `v0.3.0-alpha`). It runs the tests, checks the manifest and changelog match the tag, builds the zip and `SHA256SUMS.txt`, creates the tag and publishes the release. Tags with a `-label` are marked pre-release.
+2. In **Actions → Release → Run workflow**, enter the tag (e.g. `v0.4.0`). It runs the tests, checks the manifest and changelog match the tag, builds the zip and `SHA256SUMS.txt`, creates the tag and publishes the release. Tags with a `-label` (e.g. `v0.5.0-beta`) are marked pre-release; a plain `vX.Y.Z` tag becomes the Latest release. A Windows job also builds `YT-Media-Harvester-Setup-<tag>.exe` and attaches it.
+3. To try the installer without publishing anything, run the workflow with **installer_only** ticked (any tag, e.g. `v0.4.0-test`) and download the `installer` artifact from the run.
 
 ## How it works
 
